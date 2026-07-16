@@ -54,9 +54,6 @@ D:\c++-trainer\trainer_log.txt
 - MinGW / TDM-GCC 或支持 CMake 的 C++ 编译环境
 - DirectX 11 相关系统库
 - ImGui 源码，已放在 `vendor/imgui/`
-- MinHook 预编译库目录 `MinHook_134_lib/`
-
-> 注意：当前仓库的构建文件引用了 `MinHook_134_lib`，如果本地没有该目录，需要自行放入对应的 MinHook 头文件和库文件，或者调整构建脚本。
 
 ### 2. 编译
 
