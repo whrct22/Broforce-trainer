@@ -1,6 +1,6 @@
 # C++ Trainer
 
-![截图]([https://filestation.mlyl.io/preview?key=%E5%85%B6%E4%BB%96%E9%A1%B9%E7%9B%AE%2F%E6%89%B9%E6%B3%A8+2026-07-17+010031.png])
+![截图](https://filestation.mlyl.io/download?key=%E5%85%B6%E4%BB%96%E9%A1%B9%E7%9B%AE%2F%E6%89%B9%E6%B3%A8+2026-07-17+010031.png)
 
 > 一个用于学习 Windows DLL 注入、DirectX 11 Hook、ImGui 覆盖层和游戏内存读写的 Broforce 修改器示例项目。请仅在本机、学习和自用场景下使用。
 
