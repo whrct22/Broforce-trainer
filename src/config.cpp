@@ -1,10 +1,36 @@
 #include "config.h"
 #include <Windows.h>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
 
 void Log(const char* msg);
 
 namespace {
+    std::string GetLocalConfigPath() {
+        HMODULE module = nullptr;
+        GetModuleHandleExA(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            reinterpret_cast<LPCSTR>(&GetLocalConfigPath),
+            &module
+        );
+
+        char modulePath[MAX_PATH] = {};
+        DWORD length = GetModuleFileNameA(module, modulePath, MAX_PATH);
+        if (length == 0 || length >= MAX_PATH) {
+            return "trainer_config.ini";
+        }
+
+        char* slash = strrchr(modulePath, '\\');
+        if (!slash) {
+            return "trainer_config.ini";
+        }
+
+        *(slash + 1) = '\0';
+        return std::string(modulePath) + "trainer_config.ini";
+    }
+
     int ReadInt(const char* path, const char* section, const char* key, int defaultValue) {
         return GetPrivateProfileIntA(section, key, defaultValue, path);
     }
@@ -43,17 +69,25 @@ Config& Config::Instance() {
     return instance;
 }
 
+const char* Config::Path() const {
+    return m_path.c_str();
+}
+
 bool Config::Load() {
-    LoadLock(m_path, "health", health);
-    LoadLock(m_path, "max_health", maxHealth);
-    LoadLock(m_path, "move_speed", moveSpeed);
-    LoadLock(m_path, "max_fall_speed", maxFallSpeed);
-    LoadLock(m_path, "jump_height", jumpHeight);
-    LoadLock(m_path, "fire_rate", fireRate);
-    LoadLock(m_path, "skill", skill);
-    LoadLock(m_path, "lives", lives);
-    LoadLock(m_path, "acid_rain", acidRain);
-    guiAlpha = ReadDouble(m_path, "gui", "alpha", guiAlpha);
+    if (m_path.empty()) {
+        m_path = GetLocalConfigPath();
+    }
+
+    LoadLock(m_path.c_str(), "health", health);
+    LoadLock(m_path.c_str(), "max_health", maxHealth);
+    LoadLock(m_path.c_str(), "move_speed", moveSpeed);
+    LoadLock(m_path.c_str(), "max_fall_speed", maxFallSpeed);
+    LoadLock(m_path.c_str(), "jump_height", jumpHeight);
+    LoadLock(m_path.c_str(), "fire_rate", fireRate);
+    LoadLock(m_path.c_str(), "skill", skill);
+    LoadLock(m_path.c_str(), "lives", lives);
+    LoadLock(m_path.c_str(), "acid_rain", acidRain);
+    guiAlpha = ReadDouble(m_path.c_str(), "gui", "alpha", guiAlpha);
     if (guiAlpha < 0.20) guiAlpha = 0.20;
     if (guiAlpha > 1.00) guiAlpha = 1.00;
 
@@ -63,16 +97,16 @@ bool Config::Load() {
 }
 
 bool Config::Save() const {
-    SaveLock(m_path, "health", health);
-    SaveLock(m_path, "max_health", maxHealth);
-    SaveLock(m_path, "move_speed", moveSpeed);
-    SaveLock(m_path, "max_fall_speed", maxFallSpeed);
-    SaveLock(m_path, "jump_height", jumpHeight);
-    SaveLock(m_path, "fire_rate", fireRate);
-    SaveLock(m_path, "skill", skill);
-    SaveLock(m_path, "lives", lives);
-    SaveLock(m_path, "acid_rain", acidRain);
-    WriteDouble(m_path, "gui", "alpha", guiAlpha);
+    SaveLock(m_path.c_str(), "health", health);
+    SaveLock(m_path.c_str(), "max_health", maxHealth);
+    SaveLock(m_path.c_str(), "move_speed", moveSpeed);
+    SaveLock(m_path.c_str(), "max_fall_speed", maxFallSpeed);
+    SaveLock(m_path.c_str(), "jump_height", jumpHeight);
+    SaveLock(m_path.c_str(), "fire_rate", fireRate);
+    SaveLock(m_path.c_str(), "skill", skill);
+    SaveLock(m_path.c_str(), "lives", lives);
+    SaveLock(m_path.c_str(), "acid_rain", acidRain);
+    WriteDouble(m_path.c_str(), "gui", "alpha", guiAlpha);
     return true;
 }
 

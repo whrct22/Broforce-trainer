@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 class Config {
 public:
     struct LockConfig {
@@ -13,6 +15,7 @@ public:
     bool Save() const;
     void SaveIfDirty();
     void MarkDirty();
+    const char* Path() const;
 
     LockConfig health{ false, 9999.0 };
     LockConfig maxHealth{ false, 9999.0 };
@@ -30,5 +33,5 @@ private:
     Config() = default;
 
     bool m_dirty = false;
-    const char* m_path = "D:\\c++-trainer\\trainer_config.ini";
+    std::string m_path;
 };

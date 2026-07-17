@@ -1,9 +1,10 @@
-# Broforce Trainer - MinGW Makefile
+# Broforce Trainer - Zig Makefile
 # 使用方法: mingw32-make 或 make
 
 # 编译器
-CXX = g++
-CC = gcc
+ZIG = D:/zig-x86_64-windows-0.17.0-dev.1415+64dfaa568/zig.exe
+CXX = $(ZIG) c++ -target x86_64-windows-gnu
+CC = $(ZIG) cc -target x86_64-windows-gnu
 
 # 目标
 TARGET = BroforceTrainer.dll
@@ -11,12 +12,8 @@ INJECTOR = BroforceInjector.exe
 
 # 路径
 IMGUI_DIR = vendor/imgui
-MINHOOK_DIR = MinHook_134_lib
 SRC_DIR = src
 BUILD_DIR = build
-
-# MinHook库 (64位)
-MINHOOK_LIB = $(MINHOOK_DIR)/lib/libMinHook.x64.lib
 
 # ImGui源文件
 IMGUI_SRCS = \
@@ -43,10 +40,9 @@ ALL_SRCS = $(TRAINER_SRCS) $(IMGUI_SRCS)
 # 头文件搜索路径
 INCLUDES = -I$(IMGUI_DIR) \
            -I$(IMGUI_DIR)/backends \
-           -I$(MINHOOK_DIR)/include \
            -I$(SRC_DIR)
 
-# 编译选项
+# 编译选项：使用常规 O2 构建，不做 strip/section-gc/打包压缩等隐藏或极限缩小体积处理。
 CXXFLAGS = -std=c++17 -O2 -Wall \
            -D_CRT_SECURE_NO_WARNINGS \
            -DWIN32_LEAN_AND_MEAN \
@@ -55,7 +51,7 @@ CXXFLAGS = -std=c++17 -O2 -Wall \
 
 # 链接选项
 LDFLAGS = -shared -static-libgcc -static-libstdc++
-LDLIBS = -ld3d11 -ld3dcompiler -ldxgi -lgdi32 -lole32 -limm32
+LDLIBS = -ld3d11 -ld3dcompiler_47 -ldxgi -lgdi32 -lole32 -limm32
 
 # 目标文件
 OBJS = $(ALL_SRCS:.cpp=.o)
@@ -74,8 +70,7 @@ all: $(TARGET) $(INJECTOR)
 
 # 链接DLL
 $(TARGET): $(OBJS)
-	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS) -Wl,--allow-multiple-definition
-
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 # 注入器
 $(INJECTOR): injector/injector.cpp
 	$(CXX) -std=c++17 -O2 -DUNICODE -D_UNICODE -o $@ $< -lpsapi

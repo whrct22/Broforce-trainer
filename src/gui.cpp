@@ -361,8 +361,8 @@ void GUI::Render() {
     ImGui::Text("AOB Hook: %s，扫描: %s/%s，第 %d 次", g_playerHookInstalled ? "已安装" : "未安装", g_aobScanActive ? "进行中" : "停止", g_aobScanFinished ? "已结束" : "未结束", g_aobScanAttempts);
     ImGui::Text("注入点: 0x%p，newmem: 0x%p", g_playerHookTarget, g_playerHookCode);
     ImGui::Text("捕获到的玩家基址: 0x%p", (void*)g_capturedPlayerBase);
-    ImGui::Text("配置文件: D:\\c++-trainer\\trainer_config.ini");
-    ImGui::Text("日志文件: D:\\c++-trainer\\trainer_log.txt");
+    ImGui::Text("配置文件: %s", config.Path());
+    ImGui::Text("日志文件: BroforceTrainer.dll 同目录下的 trainer_log.txt");
     float alpha = (float)config.guiAlpha;
     ImGui::SetNextItemWidth(180.0f * guiScale);
     if (ImGui::SliderFloat("窗口透明度", &alpha, 0.20f, 1.00f, "%.2f")) {

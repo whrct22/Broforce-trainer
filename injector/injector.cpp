@@ -2,129 +2,213 @@
 #include <TlHelp32.h>
 #include <cstdio>
 #include <cstring>
+#include <cwchar>
+#include <string>
 
-// 获取进程ID
-DWORD FindProcessId(const wchar_t* processName) {
-    DWORD processId = 0;
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+namespace {
+constexpr const wchar_t* kAllowedProcessNames[] = {
+    L"Broforce.exe",
+    L"Broforce.bin.x86_64.exe",
+};
+constexpr const wchar_t* kTrainerDllName = L"BroforceTrainer.dll";
 
-    if (snapshot != INVALID_HANDLE_VALUE) {
-        PROCESSENTRY32W processEntry;
-        processEntry.dwSize = sizeof(processEntry);
+const wchar_t* BaseName(const wchar_t* path) {
+    const wchar_t* slash = wcsrchr(path, L'\\');
+    const wchar_t* forwardSlash = wcsrchr(path, L'/');
+    const wchar_t* last = slash > forwardSlash ? slash : forwardSlash;
+    return last ? last + 1 : path;
+}
 
-        if (Process32FirstW(snapshot, &processEntry)) {
-            do {
-                if (_wcsicmp(processEntry.szExeFile, processName) == 0) {
-                    processId = processEntry.th32ProcessID;
-                    break;
-                }
-            } while (Process32NextW(snapshot, &processEntry));
+bool IsAllowedProcessName(const wchar_t* processName) {
+    for (const wchar_t* allowedName : kAllowedProcessNames) {
+        if (_wcsicmp(processName, allowedName) == 0) {
+            return true;
         }
-        CloseHandle(snapshot);
+    }
+    return false;
+}
+
+bool GetInjectorDirectory(wchar_t* directory, DWORD directoryCount) {
+    wchar_t modulePath[MAX_PATH] = {};
+    DWORD length = GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH) {
+        return false;
     }
 
+    wchar_t* slash = wcsrchr(modulePath, L'\\');
+    if (!slash) {
+        return false;
+    }
+
+    *slash = L'\0';
+    if (wcslen(modulePath) + 1 > directoryCount) {
+        return false;
+    }
+
+    wcscpy(directory, modulePath);
+    return true;
+}
+
+bool BuildLocalDllPath(wchar_t* dllPath, DWORD dllPathCount) {
+    wchar_t injectorDirectory[MAX_PATH] = {};
+    if (!GetInjectorDirectory(injectorDirectory, MAX_PATH)) {
+        return false;
+    }
+
+    if (wcslen(injectorDirectory) + wcslen(kTrainerDllName) + 2 > dllPathCount) {
+        return false;
+    }
+
+    swprintf(dllPath, dllPathCount, L"%ls\\%ls", injectorDirectory, kTrainerDllName);
+    return true;
+}
+
+bool IsExpectedTrainerDll(const wchar_t* fullPath) {
+    return _wcsicmp(BaseName(fullPath), kTrainerDllName) == 0;
+}
+
+bool GetProcessImagePath(DWORD processId, wchar_t* imagePath, DWORD imagePathCount) {
+    HANDLE processHandle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+    if (!processHandle) {
+        return false;
+    }
+
+    DWORD size = imagePathCount;
+    bool ok = QueryFullProcessImageNameW(processHandle, 0, imagePath, &size) != FALSE;
+    CloseHandle(processHandle);
+    return ok;
+}
+}
+
+// 获取明确允许的 Broforce 进程 ID，不匹配系统进程或其它任意进程。
+DWORD FindBroforceProcessId(wchar_t* matchedName, DWORD matchedNameCount, wchar_t* imagePath, DWORD imagePathCount) {
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) {
+        printf("[ERROR] CreateToolhelp32Snapshot failed: %lu\n", GetLastError());
+        return 0;
+    }
+
+    DWORD processId = 0;
+    PROCESSENTRY32W processEntry = {};
+    processEntry.dwSize = sizeof(processEntry);
+
+    if (Process32FirstW(snapshot, &processEntry)) {
+        do {
+            if (!IsAllowedProcessName(processEntry.szExeFile)) {
+                continue;
+            }
+
+            processId = processEntry.th32ProcessID;
+            if (matchedName) {
+                if (wcslen(processEntry.szExeFile) + 1 <= matchedNameCount) {
+                    wcscpy(matchedName, processEntry.szExeFile);
+                }
+            }
+            if (imagePath) {
+                imagePath[0] = L'\0';
+                GetProcessImagePath(processId, imagePath, imagePathCount);
+            }
+            break;
+        } while (Process32NextW(snapshot, &processEntry));
+    }
+
+    CloseHandle(snapshot);
     return processId;
 }
 
 bool InjectDLL(DWORD processId, const wchar_t* dllPath) {
-    printf("[INFO] Opening process %lu...\n", processId);
+    printf("[INFO] Opening target process %lu with DLL-injection permissions only...\n", processId);
 
-    HANDLE processHandle = OpenProcess(
-        PROCESS_ALL_ACCESS,
-        FALSE,
-        processId
-    );
+    DWORD desiredAccess = PROCESS_CREATE_THREAD |
+        PROCESS_QUERY_INFORMATION |
+        PROCESS_VM_OPERATION |
+        PROCESS_VM_WRITE |
+        PROCESS_VM_READ;
 
-    if (processHandle == NULL) {
+    HANDLE processHandle = OpenProcess(desiredAccess, FALSE, processId);
+    if (processHandle == nullptr) {
         printf("[ERROR] OpenProcess failed: %lu\n", GetLastError());
         return false;
     }
 
-    // 在目标进程中分配内存
+    // 在目标进程中分配内存，只写入明确显示给用户的本地 DLL 完整路径。
     size_t dllPathSize = (wcslen(dllPath) + 1) * sizeof(wchar_t);
-    printf("[INFO] Allocating %zu bytes in target process...\n", dllPathSize);
+    printf("[INFO] Allocating %zu bytes in target process for the DLL path...\n", dllPathSize);
 
     LPVOID remoteMemory = VirtualAllocEx(
         processHandle,
-        NULL,
+        nullptr,
         dllPathSize,
         MEM_COMMIT | MEM_RESERVE,
         PAGE_READWRITE
     );
 
-    if (remoteMemory == NULL) {
+    if (remoteMemory == nullptr) {
         printf("[ERROR] VirtualAllocEx failed: %lu\n", GetLastError());
         CloseHandle(processHandle);
         return false;
     }
 
-    // 写入DLL路径
     printf("[INFO] Writing DLL path to target process...\n");
-    if (!WriteProcessMemory(processHandle, remoteMemory, dllPath, dllPathSize, NULL)) {
+    if (!WriteProcessMemory(processHandle, remoteMemory, dllPath, dllPathSize, nullptr)) {
         printf("[ERROR] WriteProcessMemory failed: %lu\n", GetLastError());
         VirtualFreeEx(processHandle, remoteMemory, 0, MEM_RELEASE);
         CloseHandle(processHandle);
         return false;
     }
 
-    // 获取LoadLibraryW地址
     HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
-    FARPROC loadLibrary = GetProcAddress(kernel32, "LoadLibraryW");
+    FARPROC loadLibrary = kernel32 ? GetProcAddress(kernel32, "LoadLibraryW") : nullptr;
 
-    if (loadLibrary == NULL) {
-        printf("[ERROR] GetProcAddress failed\n");
+    if (loadLibrary == nullptr) {
+        printf("[ERROR] GetProcAddress(LoadLibraryW) failed\n");
         VirtualFreeEx(processHandle, remoteMemory, 0, MEM_RELEASE);
         CloseHandle(processHandle);
         return false;
     }
 
-    // 创建远程线程
-    printf("[INFO] Creating remote thread...\n");
+    printf("[INFO] Creating remote thread to call LoadLibraryW...\n");
     HANDLE remoteThread = CreateRemoteThread(
         processHandle,
-        NULL,
+        nullptr,
         0,
-        (LPTHREAD_START_ROUTINE)loadLibrary,
+        reinterpret_cast<LPTHREAD_START_ROUTINE>(loadLibrary),
         remoteMemory,
         0,
-        NULL
+        nullptr
     );
 
-    if (remoteThread == NULL) {
+    if (remoteThread == nullptr) {
         printf("[ERROR] CreateRemoteThread failed: %lu\n", GetLastError());
         VirtualFreeEx(processHandle, remoteMemory, 0, MEM_RELEASE);
         CloseHandle(processHandle);
         return false;
     }
 
-    // 等待线程执行完成
-    printf("[INFO] Waiting for DLL to load...\n");
-    DWORD waitResult = WaitForSingleObject(remoteThread, 10000);  // 10秒超时
+    printf("[INFO] Waiting up to 10 seconds for the DLL to load...\n");
+    DWORD waitResult = WaitForSingleObject(remoteThread, 10000);
 
     if (waitResult == WAIT_TIMEOUT) {
-        printf("[ERROR] Remote thread timed out\n");
-        TerminateThread(remoteThread, 0);
+        printf("[ERROR] Remote LoadLibraryW call timed out. The thread was left untouched; no forced termination was used.\n");
         VirtualFreeEx(processHandle, remoteMemory, 0, MEM_RELEASE);
         CloseHandle(remoteThread);
         CloseHandle(processHandle);
         return false;
     }
 
-    // 获取返回值
-    DWORD exitCode;
+    DWORD exitCode = 0;
     GetExitCodeThread(remoteThread, &exitCode);
 
     if (exitCode == 0) {
-        printf("[ERROR] DLL LoadLibrary returned NULL (load failed)\n");
+        printf("[ERROR] DLL LoadLibraryW returned NULL (load failed)\n");
         VirtualFreeEx(processHandle, remoteMemory, 0, MEM_RELEASE);
         CloseHandle(remoteThread);
         CloseHandle(processHandle);
         return false;
     }
 
-    printf("[INFO] DLL loaded successfully at 0x%08X\n", exitCode);
+    printf("[INFO] DLL loaded successfully at 0x%08lX\n", exitCode);
 
-    // 清理
     VirtualFreeEx(processHandle, remoteMemory, 0, MEM_RELEASE);
     CloseHandle(remoteThread);
     CloseHandle(processHandle);
@@ -136,58 +220,63 @@ int main(int argc, char* argv[]) {
     printf("========================================\n");
     printf("   Broforce Trainer Injector\n");
     printf("========================================\n\n");
+    printf("[INFO] This tool only searches for Broforce.exe / Broforce.bin.x86_64.exe.\n");
+    printf("[INFO] It loads the explicitly named BroforceTrainer.dll into that game process.\n\n");
 
-    // 检查参数
-    if (argc < 2) {
-        printf("[ERROR] No DLL path provided!\n");
-        printf("Usage: BroforceInjector.exe <DLL path>\n");
-        printf("Example: BroforceInjector.exe BroforceTrainer.dll\n");
+    wchar_t dllPath[MAX_PATH] = {};
+    if (argc >= 2) {
+        if (MultiByteToWideChar(CP_ACP, 0, argv[1], -1, dllPath, MAX_PATH) == 0) {
+            printf("[ERROR] Failed to read DLL path argument: %lu\n", GetLastError());
+            system("pause");
+            return 1;
+        }
+    } else if (!BuildLocalDllPath(dllPath, MAX_PATH)) {
+        printf("[ERROR] Failed to build local BroforceTrainer.dll path\n");
         system("pause");
         return 1;
     }
 
-    // 转换DLL路径为宽字符
-    wchar_t dllPath[MAX_PATH];
-    MultiByteToWideChar(CP_ACP, 0, argv[1], -1, dllPath, MAX_PATH);
+    printf("[INFO] Requested DLL path: %ls\n", dllPath);
 
-    printf("[INFO] DLL path: %ls\n", dllPath);
-
-    // 检查DLL文件是否存在
     DWORD attributes = GetFileAttributesW(dllPath);
-    if (attributes == INVALID_FILE_ATTRIBUTES) {
-        printf("[ERROR] DLL file not found!\n");
+    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        printf("[ERROR] DLL file not found or path points to a directory.\n");
         system("pause");
         return 1;
     }
 
-    // 获取完整路径
-    wchar_t fullPath[MAX_PATH];
-    if (!GetFullPathNameW(dllPath, MAX_PATH, fullPath, NULL)) {
-        printf("[ERROR] Failed to get full path\n");
+    wchar_t fullPath[MAX_PATH] = {};
+    if (!GetFullPathNameW(dllPath, MAX_PATH, fullPath, nullptr)) {
+        printf("[ERROR] Failed to get full DLL path: %lu\n", GetLastError());
         system("pause");
         return 1;
     }
 
-    printf("[INFO] Full path: %ls\n\n", fullPath);
+    if (!IsExpectedTrainerDll(fullPath)) {
+        printf("[ERROR] Refusing to inject an arbitrary DLL. Expected file name: %ls\n", kTrainerDllName);
+        system("pause");
+        return 1;
+    }
 
-    // 查找Broforce进程
+    printf("[INFO] Full DLL path: %ls\n\n", fullPath);
+
     printf("[INFO] Searching for Broforce process...\n");
-    DWORD processId = FindProcessId(L"Broforce.exe");
+    wchar_t matchedProcessName[MAX_PATH] = {};
+    wchar_t processImagePath[MAX_PATH] = {};
+    DWORD processId = FindBroforceProcessId(matchedProcessName, MAX_PATH, processImagePath, MAX_PATH);
 
     if (processId == 0) {
-        processId = FindProcessId(L"Broforce.bin.x86_64.exe");
-    }
-
-    if (processId == 0) {
-        printf("[ERROR] Broforce process not found!\n");
-        printf("Please make sure the game is running.\n");
+        printf("[ERROR] Broforce process not found. Please start the game first.\n");
         system("pause");
         return 1;
     }
 
-    printf("[INFO] Found process ID: %lu\n\n", processId);
+    printf("[INFO] Found target process: %ls (PID %lu)\n", matchedProcessName, processId);
+    if (processImagePath[0] != L'\0') {
+        printf("[INFO] Target process path: %ls\n", processImagePath);
+    }
+    printf("[INFO] No system process names or system process paths are used as a target.\n\n");
 
-    // 注入DLL；刚点“脱出 DLL”后 Windows 可能还在卸载模块，短时间内 LoadLibrary 会返回 NULL，自动重试几次。
     printf("[INFO] Injecting DLL...\n");
     bool injected = false;
     for (int attempt = 1; attempt <= 5; ++attempt) {
@@ -204,12 +293,12 @@ int main(int argc, char* argv[]) {
 
     if (injected) {
         printf("\n");
-        printf("[SUCCESS] Injection completed!\n");
-        printf("[INFO] Press INSERT key to open cheat menu\n");
+        printf("[SUCCESS] Injection completed.\n");
+        printf("[INFO] Press INSERT in the game to open the trainer menu.\n");
         printf("[INFO] Injector will now close automatically.\n");
     } else {
         printf("\n");
-        printf("[FAILED] Injection failed!\n");
+        printf("[FAILED] Injection failed.\n");
         system("pause");
         return 1;
     }

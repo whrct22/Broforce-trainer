@@ -16,9 +16,6 @@ set(IMGUI_SOURCES
     ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
 )
 
-# MinHook - 使用预编译库
-set(MINHOOK_DIR ${CMAKE_SOURCE_DIR}/MinHook_134_lib)
-
 # Trainer sources
 set(TRAINER_SOURCES
     src/dllmain.cpp
@@ -39,29 +36,15 @@ add_library(${PROJECT_NAME} SHARED
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
-    ${MINHOOK_DIR}/include
     src
 )
 
 # Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
     d3d11
-    d3dcompiler
+    d3dcompiler_47
     dxgi
 )
-
-# 链接MinHook静态库
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    # 64位
-    target_link_libraries(${PROJECT_NAME} PRIVATE
-        ${MINHOOK_DIR}/lib/libMinHook.x64.lib
-    )
-else()
-    # 32位
-    target_link_libraries(${PROJECT_NAME} PRIVATE
-        ${MINHOOK_DIR}/lib/libMinHook.x86.lib
-    )
-endif()
 
 # Preprocessor definitions
 target_compile_definitions(${PROJECT_NAME} PRIVATE

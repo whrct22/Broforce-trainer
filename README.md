@@ -29,16 +29,16 @@
 - 调整修改器窗口透明度
 - 从菜单中恢复修改并卸载 DLL，释放 DLL 文件占用，方便重新编译
 
-配置会自动保存到：
+配置会自动保存到 `BroforceTrainer.dll` 同目录下：
 
 ```txt
-D:\c++-trainer\trainer_config.ini
+trainer_config.ini
 ```
 
-日志会写入：
+日志会写入 `BroforceTrainer.dll` 同目录下：
 
 ```txt
-D:\c++-trainer\trainer_log.txt
+trainer_log.txt
 ```
 
 ## 使用方法
@@ -51,7 +51,7 @@ D:\c++-trainer\trainer_log.txt
 
 - Windows
 - Broforce 游戏进程
-- MinGW / TDM-GCC 或支持 CMake 的 C++ 编译环境
+- Zig C++ 编译器（默认路径：`D:\zig-x86_64-windows-0.17.0-dev.1415+64dfaa568\zig.exe`）或支持 CMake 的 C++ 编译环境
 - DirectX 11 相关系统库
 - ImGui 源码，已放在 `vendor/imgui/`
 
@@ -72,11 +72,11 @@ BroforceTrainer.dll
 BroforceInjector.exe
 ```
 
-`build.bat` 中默认把 `D:\TDM-GCC\bin` 加入 `PATH`，如果你的编译器不在这个位置，需要修改脚本中的路径。
+`build.bat` 默认使用 `D:\zig-x86_64-windows-0.17.0-dev.1415+64dfaa568\zig.exe`，并通过 `zig c++ -target x86_64-windows-gnu` 编译 C++ 源码；如果 Zig 不在这个位置，需要修改脚本中的 `ZIG` 路径。
 
 #### 方式二：使用 Makefile
 
-如果已经配置好 MinGW：
+如果想使用 Makefile，并且已经安装 `make` / `mingw32-make`：
 
 ```bash
 mingw32-make
@@ -121,13 +121,21 @@ Broforce.bin.x86_64.exe
 在生成文件所在目录运行：
 
 ```bat
+BroforceInjector.exe
+```
+
+也可以显式传入同名 DLL 路径：
+
+```bat
 BroforceInjector.exe BroforceTrainer.dll
 ```
 
+为避免把注入器变成任意 DLL 加载器，注入器会拒绝文件名不是 `BroforceTrainer.dll` 的参数。
+
 注入器会：
 
-1. 查找 Broforce 进程 ID。
-2. 打开目标进程。
+1. 查找明确允许的 Broforce 进程 ID（只匹配 `Broforce.exe` / `Broforce.bin.x86_64.exe`，不使用系统进程名作为目标）。
+2. 打开目标进程，权限仅限 DLL 加载所需的线程创建、查询、远程内存分配和写入。
 3. 在目标进程中分配内存。
 4. 写入 DLL 路径。
 5. 通过远程线程调用 `LoadLibraryW` 加载 `BroforceTrainer.dll`。
@@ -212,8 +220,9 @@ Hook IDXGISwapChain::Present 和 ResizeBuffers
 核心步骤是：
 
 - 使用 `CreateToolhelp32Snapshot` 枚举进程。
-- 找到 Broforce 的进程 ID。
-- 使用 `OpenProcess` 打开目标进程。
+- 只接受 `Broforce.exe` / `Broforce.bin.x86_64.exe` 作为目标进程名。
+- 找到 Broforce 的进程 ID 后打印目标进程路径，便于用户确认。
+- 使用最小必要权限打开目标进程，而不是 `PROCESS_ALL_ACCESS`。
 - 使用 `VirtualAllocEx` 在目标进程分配内存。
 - 使用 `WriteProcessMemory` 写入 DLL 完整路径。
 - 使用 `CreateRemoteThread` 调用 `LoadLibraryW`。
@@ -317,7 +326,7 @@ alpha=1.000000
 ```txt
 .
 ├── CMakeLists.txt              # 主 CMake 构建文件，构建 DLL 并引入 injector 子项目
-├── Makefile                    # MinGW Makefile 构建脚本
+├── Makefile                    # Zig Makefile 构建脚本
 ├── build.bat                   # Windows 批处理增量构建脚本
 ├── trainer_config.ini          # 修改器配置文件
 ├── Broforce.CT                 # Cheat Engine 表，作为偏移和注入点参考
@@ -378,13 +387,13 @@ alpha=1.000000
 
 卸载后再重新编译。
 
-### 配置文件路径不对
+### 配置文件和日志在哪里
 
-当前配置和日志路径在代码中写死为：
+配置文件和日志不再写死到固定开发目录。DLL 会在 `BroforceTrainer.dll` 同目录下读写：
 
 ```txt
-D:\c++-trainer\trainer_config.ini
-D:\c++-trainer\trainer_log.txt
+trainer_config.ini
+trainer_log.txt
 ```
 
-如果项目移动到了其他路径，需要修改 `src/config.h` 和 `src/dllmain.cpp` 中对应路径。
+这样移动项目目录或发布到其它路径时，不需要修改源码路径。

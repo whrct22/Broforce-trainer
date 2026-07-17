@@ -7,6 +7,7 @@
 #include <cstring>
 #include <cstdint>
 #include <cstdarg>
+#include <string>
 
 #include "memory.h"
 #include "cheat.h"
@@ -359,8 +360,32 @@ uintptr_t ScanExecutableMemory(const BYTE* pattern, const char* mask) {
 
 void AOBScanThread();
 
+const char* GetLogPath() {
+    static std::string path;
+    if (!path.empty()) {
+        return path.c_str();
+    }
+
+    char modulePath[MAX_PATH] = {};
+    DWORD length = GetModuleFileNameA(g_module, modulePath, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH) {
+        path = "trainer_log.txt";
+        return path.c_str();
+    }
+
+    char* slash = strrchr(modulePath, '\\');
+    if (!slash) {
+        path = "trainer_log.txt";
+        return path.c_str();
+    }
+
+    *(slash + 1) = '\0';
+    path = std::string(modulePath) + "trainer_log.txt";
+    return path.c_str();
+}
+
 void Log(const char* msg) {
-    FILE* f = fopen("D:\\c++-trainer\\trainer_log.txt", "a");
+    FILE* f = fopen(GetLogPath(), "a");
     if (f) {
         fprintf(f, "%s\n", msg);
         fclose(f);
