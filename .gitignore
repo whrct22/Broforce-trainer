@@ -1,3 +1,7 @@
 /build
 BroforceInjector.exe
 BroforceTrainer.dll
+*.txt
+c++-trainer.zip
+BroforceInjector.pdb
+BroforceTrainer.pdb
