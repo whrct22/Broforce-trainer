@@ -78,15 +78,12 @@ bool Config::Load() {
         m_path = GetLocalConfigPath();
     }
 
-    LoadLock(m_path.c_str(), "health", health);
-    LoadLock(m_path.c_str(), "max_health", maxHealth);
-    LoadLock(m_path.c_str(), "move_speed", moveSpeed);
-    LoadLock(m_path.c_str(), "max_fall_speed", maxFallSpeed);
-    LoadLock(m_path.c_str(), "jump_height", jumpHeight);
-    LoadLock(m_path.c_str(), "fire_rate", fireRate);
-    LoadLock(m_path.c_str(), "skill", skill);
-    LoadLock(m_path.c_str(), "lives", lives);
-    LoadLock(m_path.c_str(), "acid_rain", acidRain);
+    LoadLock(m_path.c_str(), "coin", coin);
+    LoadLock(m_path.c_str(), "fish_coin", fishCoin);
+    LoadLock(m_path.c_str(), "energy", energy);
+    LoadLock(m_path.c_str(), "day", day);
+    LoadLock(m_path.c_str(), "hour", hour);
+    LoadLock(m_path.c_str(), "minute", minute);
     guiAlpha = ReadDouble(m_path.c_str(), "gui", "alpha", guiAlpha);
     if (guiAlpha < 0.20) guiAlpha = 0.20;
     if (guiAlpha > 1.00) guiAlpha = 1.00;
@@ -97,15 +94,12 @@ bool Config::Load() {
 }
 
 bool Config::Save() const {
-    SaveLock(m_path.c_str(), "health", health);
-    SaveLock(m_path.c_str(), "max_health", maxHealth);
-    SaveLock(m_path.c_str(), "move_speed", moveSpeed);
-    SaveLock(m_path.c_str(), "max_fall_speed", maxFallSpeed);
-    SaveLock(m_path.c_str(), "jump_height", jumpHeight);
-    SaveLock(m_path.c_str(), "fire_rate", fireRate);
-    SaveLock(m_path.c_str(), "skill", skill);
-    SaveLock(m_path.c_str(), "lives", lives);
-    SaveLock(m_path.c_str(), "acid_rain", acidRain);
+    SaveLock(m_path.c_str(), "coin", coin);
+    SaveLock(m_path.c_str(), "fish_coin", fishCoin);
+    SaveLock(m_path.c_str(), "energy", energy);
+    SaveLock(m_path.c_str(), "day", day);
+    SaveLock(m_path.c_str(), "hour", hour);
+    SaveLock(m_path.c_str(), "minute", minute);
     WriteDouble(m_path.c_str(), "gui", "alpha", guiAlpha);
     return true;
 }

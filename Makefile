@@ -1,4 +1,4 @@
-# Broforce Trainer - Zig Makefile
+# Dojo NTR Trainer - Zig Makefile
 # 使用方法: mingw32-make 或 make
 
 # 编译器
@@ -7,12 +7,14 @@ CXX = $(ZIG) c++ -target x86_64-windows-gnu
 CC = $(ZIG) cc -target x86_64-windows-gnu
 
 # 目标
-TARGET = BroforceTrainer.dll
-INJECTOR = BroforceInjector.exe
+TARGET = DojoNTRTrainer.dll
+INJECTOR = DojoNTRInjector.exe
+MONO_MODULE = MonoModule.dll
 
 # 路径
 IMGUI_DIR = vendor/imgui
 SRC_DIR = src
+MONO_DIR = mono_module
 BUILD_DIR = build
 
 # ImGui源文件
@@ -34,8 +36,13 @@ TRAINER_SRCS = \
     $(SRC_DIR)/hook.cpp \
     $(SRC_DIR)/config.cpp
 
+# Mono模块源文件
+MONO_MODULE_SRCS = \
+    $(MONO_DIR)/mono_module.cpp
+
 # 所有源文件
 ALL_SRCS = $(TRAINER_SRCS) $(IMGUI_SRCS)
+MONO_MODULE_OBJS = $(MONO_MODULE_SRCS:.cpp=.o)
 
 # 头文件搜索路径
 INCLUDES = -I$(IMGUI_DIR) \
@@ -60,9 +67,10 @@ OBJS = $(ALL_SRCS:.cpp=.o)
 # 规则
 # ============================================================
 
-.PHONY: all clean injector
+.PHONY: all clean injector mono-module
 
 all: $(TARGET) $(INJECTOR)
+mono-module: $(MONO_MODULE)
 
 # 编译.cpp文件
 %.o: %.cpp
@@ -71,10 +79,15 @@ all: $(TARGET) $(INJECTOR)
 # 链接DLL
 $(TARGET): $(OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+# 独立 Mono/U3D 查询模块
+$(MONO_MODULE): $(MONO_MODULE_OBJS)
+	$(CXX) $(LDFLAGS) -o $@ $^ -luser32 -lkernel32
+
 # 注入器
 $(INJECTOR): injector/injector.cpp
 	$(CXX) -std=c++17 -O2 -DUNICODE -D_UNICODE -o $@ $< -lpsapi
 
 clean:
-	del /q *.o src\*.o vendor\imgui\*.o vendor\imgui\backends\*.o 2>nul || true
-	del /q $(TARGET) $(INJECTOR) 2>nul || true
+	del /q *.o src\*.o mono_module\*.o vendor\imgui\*.o vendor\imgui\backends\*.o 2>nul || true
+	del /q $(TARGET) $(INJECTOR) $(MONO_MODULE) 2>nul || true

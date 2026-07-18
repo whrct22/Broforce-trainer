@@ -28,44 +28,69 @@ ID3D11RenderTargetView* g_renderTargetView = nullptr;
 HWND g_gameHwnd = nullptr;
 bool g_initialized = false;
 
-uintptr_t g_capturedPlayerBase = 0;
-void* g_playerHookTarget = nullptr;
-void* g_playerHookCode = nullptr;
-BYTE g_playerHookOriginal[6] = {};
-bool g_playerHookInstalled = false;
+uintptr_t g_capturedUserDataBase = 0;
+void* g_userDataHookTarget = nullptr;
+void* g_userDataHookCode = nullptr;
+BYTE g_userDataHookOriginal[10] = {};
+bool g_userDataHookInstalled = false;
 bool g_consoleAllocated = false;
-bool g_loggedPlayerBase = false;
+bool g_loggedUserDataBase = false;
 bool g_aobScanActive = false;
 bool g_aobScanFinished = true;
 int g_aobScanAttempts = 0;
 bool g_unloadRequested = false;
 bool g_cleanupDone = false;
 HMODULE g_module = nullptr;
-uintptr_t g_lockPlayerBase = 0;
-bool g_hasOriginalHealth = false;
-int g_originalHealth = 0;
-bool g_hasOriginalMaxHealth = false;
-int g_originalMaxHealth = 0;
-bool g_hasOriginalMoveSpeed = false;
-float g_originalMoveSpeed = 0.0f;
-bool g_hasOriginalMaxFallSpeed = false;
-float g_originalMaxFallSpeed = 0.0f;
-bool g_hasOriginalJumpHeight = false;
-float g_originalJumpHeight = 0.0f;
-bool g_hasOriginalFireRate = false;
-float g_originalFireRate = 0.0f;
-bool g_hasOriginalSkill = false;
-int g_originalSkill = 0;
-bool g_hasOriginalLives = false;
-int g_originalLives = 0;
-bool g_hasOriginalAcidRain = false;
-BYTE g_originalAcidRain = 0;
+HMODULE g_monoModuleHandle = nullptr;
+int g_monoModuleLoadCount = 0;
 
-void RemovePlayerBaseHook();
+bool g_monoProbeFinished = false;
+bool g_monoProbeSucceeded = false;
+uintptr_t g_monoSetSpecialAmmoMethod = 0;
+uintptr_t g_monoSetSpecialAmmoInjectPoint = 0;
+uintptr_t g_monoCapturedPlayerBase = 0;
+void* g_monoPlayerHookTarget = nullptr;
+void* g_monoPlayerHookCode = nullptr;
+BYTE g_monoPlayerHookOriginal[6] = {};
+bool g_monoPlayerHookInstalled = false;
+bool g_monoProbeActive = false;
+bool g_loggedMonoPlayerBase = false;
+char g_monoProbeSummary[2048] = "MonoModule 尚未探测";
+size_t g_userDataHookOriginalSize = 0;
+bool g_logInitialized = false;
+HANDLE g_unloadThreadHandle = nullptr;
+DWORD g_mainThreadId = 0;
+
+bool g_hasOriginalCoin = false;
+int g_originalCoin = 0;
+uintptr_t g_originalCoinAddress = 0;
+bool g_hasOriginalFishCoin = false;
+int g_originalFishCoin = 0;
+uintptr_t g_originalFishCoinAddress = 0;
+bool g_hasOriginalEnergy = false;
+int g_originalEnergy = 0;
+uintptr_t g_originalEnergyAddress = 0;
+bool g_hasOriginalDay = false;
+int g_originalDay = 0;
+uintptr_t g_originalDayAddress = 0;
+bool g_hasOriginalHour = false;
+int g_originalHour = 0;
+uintptr_t g_originalHourAddress = 0;
+bool g_hasOriginalMinute = false;
+int g_originalMinute = 0;
+uintptr_t g_originalMinuteAddress = 0;
+
+bool InstallUserDataHook(uintptr_t injectPoint);
+bool InstallBroforceMonoPlayerHook(uintptr_t injectPoint);
+void RemoveBroforceMonoPlayerHook();
+HMODULE LoadMonoModuleManaged();
+void ReleaseMonoModuleManaged();
+void RemoveUserDataHook();
 void RestoreConfiguredLocks();
 void CleanupTrainer();
 DWORD WINAPI UnloadThread(LPVOID);
 void Log(const char* msg);
+void Logf(const char* format, ...);
 
 void RequestUnload() {
     if (g_unloadRequested) {
@@ -77,7 +102,9 @@ void RequestUnload() {
     g_aobScanActive = false;
     HANDLE thread = CreateThread(nullptr, 0, UnloadThread, nullptr, 0, nullptr);
     if (thread) {
-        CloseHandle(thread);
+        g_unloadThreadHandle = thread;
+    } else {
+        Logf("[卸载] 创建卸载线程失败，错误码: %lu", GetLastError());
     }
 }
 
@@ -98,7 +125,8 @@ void CleanupTrainer() {
         Log("[卸载] WndProc 已恢复");
     }
 
-    RemovePlayerBaseHook();
+    RemoveUserDataHook();
+    RemoveBroforceMonoPlayerHook();
 
     if (g_originalPresent) {
         D3D11Hook::RestoreFunction(8, (void*)g_originalPresent);
@@ -132,147 +160,68 @@ void CleanupTrainer() {
         g_device = nullptr;
     }
 
+    ReleaseMonoModuleManaged();
+
     ShowCursor(TRUE);
     Log("[卸载] 清理完成，DLL 即将从游戏进程脱出");
 }
 
-uintptr_t GetLivesAddress(uintptr_t playerBase) {
-    uintptr_t livesBase = Memory::Read<uintptr_t>(playerBase + 0x218);
-    return livesBase ? livesBase + Offsets::Lives : 0;
+void RestoreIntLock(bool& hasOriginal, uintptr_t& address, int& originalValue) {
+    if (hasOriginal && address) {
+        Memory::Write<int>(address, originalValue);
+    }
+    hasOriginal = false;
+    address = 0;
 }
 
 void RestoreConfiguredLocks() {
-    if (!g_lockPlayerBase) {
-        return;
-    }
-
-    if (g_hasOriginalHealth) {
-        Memory::Write<int>(g_lockPlayerBase + Offsets::Health, g_originalHealth);
-        g_hasOriginalHealth = false;
-    }
-    if (g_hasOriginalMaxHealth) {
-        Memory::Write<int>(g_lockPlayerBase + Offsets::MaxHealth, g_originalMaxHealth);
-        g_hasOriginalMaxHealth = false;
-    }
-    if (g_hasOriginalMoveSpeed) {
-        Memory::Write<float>(g_lockPlayerBase + Offsets::MoveSpeed, g_originalMoveSpeed);
-        g_hasOriginalMoveSpeed = false;
-    }
-    if (g_hasOriginalMaxFallSpeed) {
-        Memory::Write<float>(g_lockPlayerBase + Offsets::MaxFallSpeed, g_originalMaxFallSpeed);
-        g_hasOriginalMaxFallSpeed = false;
-    }
-    if (g_hasOriginalJumpHeight) {
-        Memory::Write<float>(g_lockPlayerBase + Offsets::JumpHeight, g_originalJumpHeight);
-        g_hasOriginalJumpHeight = false;
-    }
-    if (g_hasOriginalFireRate) {
-        Memory::Write<float>(g_lockPlayerBase + Offsets::FireRate, g_originalFireRate);
-        g_hasOriginalFireRate = false;
-    }
-    if (g_hasOriginalSkill) {
-        Memory::Write<int>(g_lockPlayerBase + Offsets::Skill, g_originalSkill);
-        g_hasOriginalSkill = false;
-    }
-    if (g_hasOriginalLives) {
-        uintptr_t livesAddress = GetLivesAddress(g_lockPlayerBase);
-        if (livesAddress) {
-            Memory::Write<int>(livesAddress, g_originalLives);
-        }
-        g_hasOriginalLives = false;
-    }
-    if (g_hasOriginalAcidRain) {
-        Memory::Write<BYTE>(g_lockPlayerBase + Offsets::CanBeCoveredByAcidRain, g_originalAcidRain);
-        g_hasOriginalAcidRain = false;
-    }
-
-    g_lockPlayerBase = 0;
+    RestoreIntLock(g_hasOriginalCoin, g_originalCoinAddress, g_originalCoin);
+    RestoreIntLock(g_hasOriginalFishCoin, g_originalFishCoinAddress, g_originalFishCoin);
+    RestoreIntLock(g_hasOriginalEnergy, g_originalEnergyAddress, g_originalEnergy);
+    RestoreIntLock(g_hasOriginalDay, g_originalDayAddress, g_originalDay);
+    RestoreIntLock(g_hasOriginalHour, g_originalHourAddress, g_originalHour);
+    RestoreIntLock(g_hasOriginalMinute, g_originalMinuteAddress, g_originalMinute);
     Log("[卸载] 已恢复锁定项的原始数值");
 }
 
-void ApplyConfiguredLocks(uintptr_t playerBase) {
-    if (!playerBase) {
+void ApplyIntLock(uintptr_t address, Config::LockConfig& config, bool& hasOriginal, uintptr_t& originalAddress, int& originalValue) {
+    if (!address) {
         return;
     }
 
-    if (g_lockPlayerBase && g_lockPlayerBase != playerBase) {
-        RestoreConfiguredLocks();
+    if (!config.enabled) {
+        if (hasOriginal) {
+            RestoreIntLock(hasOriginal, originalAddress, originalValue);
+        }
+        return;
     }
-    if (!g_lockPlayerBase) {
-        g_lockPlayerBase = playerBase;
+
+    if (!hasOriginal || originalAddress != address) {
+        if (hasOriginal) {
+            RestoreIntLock(hasOriginal, originalAddress, originalValue);
+        }
+        originalValue = Memory::Read<int>(address);
+        originalAddress = address;
+        hasOriginal = true;
+    }
+
+    Memory::Write<int>(address, (int)config.value);
+}
+
+void ApplyConfiguredLocks(uintptr_t userDataBase) {
+    if (!userDataBase) {
+        return;
     }
 
     auto& config = Config::Instance();
+    uintptr_t coinAddress = Cheat::Instance().GetCoinAddress();
 
-    if (config.health.enabled) {
-        if (!g_hasOriginalHealth) {
-            g_originalHealth = Memory::Read<int>(playerBase + Offsets::Health);
-            g_hasOriginalHealth = true;
-        }
-        Memory::Write<int>(playerBase + Offsets::Health, (int)config.health.value);
-    }
-    if (config.maxHealth.enabled) {
-        if (!g_hasOriginalMaxHealth) {
-            g_originalMaxHealth = Memory::Read<int>(playerBase + Offsets::MaxHealth);
-            g_hasOriginalMaxHealth = true;
-        }
-        Memory::Write<int>(playerBase + Offsets::MaxHealth, (int)config.maxHealth.value);
-    }
-    if (config.moveSpeed.enabled) {
-        if (!g_hasOriginalMoveSpeed) {
-            g_originalMoveSpeed = Memory::Read<float>(playerBase + Offsets::MoveSpeed);
-            g_hasOriginalMoveSpeed = true;
-        }
-        Memory::Write<float>(playerBase + Offsets::MoveSpeed, (float)config.moveSpeed.value);
-    }
-    if (config.maxFallSpeed.enabled) {
-        if (!g_hasOriginalMaxFallSpeed) {
-            g_originalMaxFallSpeed = Memory::Read<float>(playerBase + Offsets::MaxFallSpeed);
-            g_hasOriginalMaxFallSpeed = true;
-        }
-        Memory::Write<float>(playerBase + Offsets::MaxFallSpeed, (float)config.maxFallSpeed.value);
-    }
-    if (config.jumpHeight.enabled) {
-        if (!g_hasOriginalJumpHeight) {
-            g_originalJumpHeight = Memory::Read<float>(playerBase + Offsets::JumpHeight);
-            g_hasOriginalJumpHeight = true;
-        }
-        Memory::Write<float>(playerBase + Offsets::JumpHeight, (float)config.jumpHeight.value);
-    }
-    if (config.fireRate.enabled) {
-        if (!g_hasOriginalFireRate) {
-            g_originalFireRate = Memory::Read<float>(playerBase + Offsets::FireRate);
-            g_hasOriginalFireRate = true;
-        }
-        Memory::Write<float>(playerBase + Offsets::FireRate, (float)config.fireRate.value);
-    }
-    if (config.skill.enabled) {
-        if (!g_hasOriginalSkill) {
-            g_originalSkill = Memory::Read<int>(playerBase + Offsets::Skill);
-            g_hasOriginalSkill = true;
-        }
-        Memory::Write<int>(playerBase + Offsets::Skill, (int)config.skill.value);
-    }
-    if (config.lives.enabled) {
-        uintptr_t livesAddress = GetLivesAddress(playerBase);
-        if (livesAddress) {
-            if (!g_hasOriginalLives) {
-                g_originalLives = Memory::Read<int>(livesAddress);
-                g_hasOriginalLives = true;
-            }
-            Memory::Write<int>(livesAddress, (int)config.lives.value);
-        }
-    }
-    if (config.acidRain.enabled) {
-        if (!g_hasOriginalAcidRain) {
-            g_originalAcidRain = Memory::Read<BYTE>(playerBase + Offsets::CanBeCoveredByAcidRain);
-            g_hasOriginalAcidRain = true;
-        }
-        int value = (int)config.acidRain.value;
-        if (value < 0) value = 0;
-        if (value > 255) value = 255;
-        Memory::Write<BYTE>(playerBase + Offsets::CanBeCoveredByAcidRain, (BYTE)value);
-    }
+    ApplyIntLock(coinAddress, config.coin, g_hasOriginalCoin, g_originalCoinAddress, g_originalCoin);
+    ApplyIntLock(userDataBase + Offsets::FishCoin, config.fishCoin, g_hasOriginalFishCoin, g_originalFishCoinAddress, g_originalFishCoin);
+    ApplyIntLock(userDataBase + Offsets::Energy, config.energy, g_hasOriginalEnergy, g_originalEnergyAddress, g_originalEnergy);
+    ApplyIntLock(userDataBase + Offsets::Day, config.day, g_hasOriginalDay, g_originalDayAddress, g_originalDay);
+    ApplyIntLock(userDataBase + Offsets::Hour, config.hour, g_hasOriginalHour, g_originalHourAddress, g_originalHour);
+    ApplyIntLock(userDataBase + Offsets::Minute, config.minute, g_hasOriginalMinute, g_originalMinuteAddress, g_originalMinute);
 }
 
 bool IsRel32Reachable(uintptr_t from, uintptr_t to) {
@@ -309,57 +258,6 @@ void* AllocateNear(uintptr_t target, size_t size) {
     return nullptr;
 }
 
-bool IsExecutableMemory(DWORD protect) {
-    if (protect & (PAGE_GUARD | PAGE_NOACCESS)) {
-        return false;
-    }
-
-    DWORD readableExecutableFlags = PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
-    return (protect & readableExecutableFlags) != 0;
-}
-
-uintptr_t ScanExecutableMemory(const BYTE* pattern, const char* mask) {
-    SYSTEM_INFO si = {};
-    GetSystemInfo(&si);
-
-    uintptr_t current = (uintptr_t)si.lpMinimumApplicationAddress;
-    uintptr_t maxAddress = (uintptr_t)si.lpMaximumApplicationAddress;
-    size_t maskLen = strlen(mask);
-
-    while (current < maxAddress) {
-        MEMORY_BASIC_INFORMATION mbi = {};
-        if (!VirtualQuery((LPCVOID)current, &mbi, sizeof(mbi))) {
-            current += 0x1000;
-            continue;
-        }
-
-        uintptr_t regionStart = (uintptr_t)mbi.BaseAddress;
-        uintptr_t regionEnd = regionStart + mbi.RegionSize;
-
-        if (mbi.State == MEM_COMMIT && IsExecutableMemory(mbi.Protect) && regionEnd > regionStart && regionEnd - regionStart >= maskLen) {
-            for (uintptr_t address = regionStart; address + maskLen <= regionEnd; ++address) {
-                bool found = true;
-                for (size_t i = 0; i < maskLen; ++i) {
-                    if (mask[i] == 'x' && *(BYTE*)(address + i) != pattern[i]) {
-                        found = false;
-                        break;
-                    }
-                }
-
-                if (found) {
-                    return address;
-                }
-            }
-        }
-
-        current = regionEnd > current ? regionEnd : current + 0x1000;
-    }
-
-    return 0;
-}
-
-void AOBScanThread();
-
 const char* GetLogPath() {
     static std::string path;
     if (!path.empty()) {
@@ -385,9 +283,20 @@ const char* GetLogPath() {
 }
 
 void Log(const char* msg) {
-    FILE* f = fopen(GetLogPath(), "a");
+    const char* logPath = GetLogPath();
+    if (!g_logInitialized) {
+        FILE* init = fopen(logPath, "wb");
+        if (init) {
+            const unsigned char bom[] = { 0xEF, 0xBB, 0xBF };
+            fwrite(bom, 1, sizeof(bom), init);
+            fclose(init);
+        }
+        g_logInitialized = true;
+    }
+
+    FILE* f = fopen(logPath, "ab");
     if (f) {
-        fprintf(f, "%s\n", msg);
+        fprintf(f, "%s\r\n", msg);
         fclose(f);
     }
 }
@@ -406,44 +315,124 @@ void InitializeConsole() {
     Log("[日志] 调试控制台已禁用，仅写入 trainer_log.txt");
 }
 
-bool InstallPlayerBaseHook(uintptr_t injectPoint) {
-    constexpr size_t originalSize = 6;
-    constexpr size_t codeSize = 64;
+std::string GetSiblingDllPath(const char* dllName) {
+    char modulePath[MAX_PATH] = {};
+    DWORD length = GetModuleFileNameA(g_module, modulePath, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH) {
+        return dllName;
+    }
 
-    Logf("[AOB] 找到 CT 注入点: 0x%p", (void*)injectPoint);
-    Logf("[AOB] 原始 6 字节: %02X %02X %02X %02X %02X %02X",
-        *(BYTE*)injectPoint, *(BYTE*)(injectPoint + 1), *(BYTE*)(injectPoint + 2),
-        *(BYTE*)(injectPoint + 3), *(BYTE*)(injectPoint + 4), *(BYTE*)(injectPoint + 5));
+    char* slash = strrchr(modulePath, '\\');
+    if (!slash) {
+        return dllName;
+    }
 
-    g_playerHookCode = AllocateNear(injectPoint, codeSize);
-    if (!g_playerHookCode) {
-        Log("[AOB] 无法在注入点 ±2GB 内分配 newmem，5 字节 jmp 跳不到，Hook 未安装");
+    *(slash + 1) = '\0';
+    return std::string(modulePath) + dllName;
+}
+
+bool BytesMatch(uintptr_t address, const BYTE* pattern, const char* mask, size_t length) {
+    MEMORY_BASIC_INFORMATION mbi = {};
+    if (!VirtualQuery((LPCVOID)address, &mbi, sizeof(mbi))) {
+        return false;
+    }
+    if (mbi.State != MEM_COMMIT || (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS))) {
         return false;
     }
 
-    Logf("[AOB] newmem 分配成功: 0x%p", g_playerHookCode);
-    memcpy(g_playerHookOriginal, (void*)injectPoint, originalSize);
+    for (size_t i = 0; i < length; ++i) {
+        if (mask[i] == 'x' && *(BYTE*)(address + i) != pattern[i]) {
+            return false;
+        }
+    }
+    return true;
+}
 
-    BYTE* code = (BYTE*)g_playerHookCode;
+uintptr_t ScanNear(uintptr_t start, size_t size, const BYTE* pattern, const char* mask) {
+    size_t maskLen = strlen(mask);
+    if (!start || size < maskLen) {
+        return 0;
+    }
+
+    for (size_t offset = 0; offset + maskLen <= size; ++offset) {
+        uintptr_t current = start + offset;
+        if (BytesMatch(current, pattern, mask, maskLen)) {
+            return current;
+        }
+    }
+    return 0;
+}
+
+HMODULE LoadMonoModuleManaged() {
+    if (g_monoModuleHandle) {
+        return g_monoModuleHandle;
+    }
+
+    std::string monoPath = GetSiblingDllPath("MonoModule.dll");
+    HMODULE monoModule = LoadLibraryA(monoPath.c_str());
+    if (!monoModule) {
+        monoModule = LoadLibraryA("MonoModule.dll");
+    }
+    if (monoModule) {
+        g_monoModuleHandle = monoModule;
+        g_monoModuleLoadCount = 1;
+    }
+    return monoModule;
+}
+
+void ReleaseMonoModuleManaged() {
+    if (!g_monoModuleHandle) {
+        return;
+    }
+
+    HMODULE monoModule = g_monoModuleHandle;
+    g_monoModuleHandle = nullptr;
+    int releases = g_monoModuleLoadCount > 0 ? g_monoModuleLoadCount : 1;
+    g_monoModuleLoadCount = 0;
+
+    for (int i = 0; i < releases; ++i) {
+        FreeLibrary(monoModule);
+    }
+    Logf("[卸载] MonoModule.dll 已随 Trainer 一并释放，释放引用次数=%d", releases);
+}
+
+bool InstallBroforceMonoPlayerHook(uintptr_t injectPoint) {
+    if (!injectPoint || g_monoPlayerHookInstalled) {
+        return g_monoPlayerHookInstalled;
+    }
+
+    constexpr size_t originalSize = sizeof(g_monoPlayerHookOriginal);
+    constexpr size_t codeSize = 64;
+
+    Logf("[MonoModule] 准备在 Broforce set_SpecialAmmo+31 安装玩家基址捕获 Hook: 0x%p", (void*)injectPoint);
+
+    g_monoPlayerHookCode = AllocateNear(injectPoint, codeSize);
+    if (!g_monoPlayerHookCode) {
+        Log("[MonoModule] 无法在 Mono 方法附近分配 newmem，玩家 Hook 未安装");
+        return false;
+    }
+
+    memcpy(g_monoPlayerHookOriginal, (void*)injectPoint, originalSize);
+
+    BYTE* code = (BYTE*)g_monoPlayerHookCode;
     size_t offset = 0;
 
-    // cmp word ptr [rdi+104h], 1
+    // Broforce.CT: cmp [rdi+104],1; only capture the local player.
     BYTE cmpHero[] = { 0x66, 0x83, 0xBF, 0x04, 0x01, 0x00, 0x00, 0x01 };
     memcpy(code + offset, cmpHero, sizeof(cmpHero));
     offset += sizeof(cmpHero);
 
-    // jne +15; non-player skips only the capture block, then still executes the original instruction
+    // jne +15: skip capture block but still execute original mov [rdi+5DC],eax.
     code[offset++] = 0x75;
     code[offset++] = 0x0F;
 
-    // Save RAX/EAX before using RAX as a scratch register.
-    // The overwritten CT instruction is mov [rdi+000005DC],eax, so EAX must stay intact.
+    // Preserve RAX/EAX because the original instruction writes eax.
     code[offset++] = 0x50;
 
-    // mov rax, &g_capturedPlayerBase
+    // mov rax, &g_monoCapturedPlayerBase
     code[offset++] = 0x48;
     code[offset++] = 0xB8;
-    *(uintptr_t*)(code + offset) = (uintptr_t)&g_capturedPlayerBase;
+    *(uintptr_t*)(code + offset) = (uintptr_t)&g_monoCapturedPlayerBase;
     offset += sizeof(uintptr_t);
 
     // mov [rax], rdi
@@ -451,35 +440,257 @@ bool InstallPlayerBaseHook(uintptr_t injectPoint) {
     memcpy(code + offset, movPlayerBase, sizeof(movPlayerBase));
     offset += sizeof(movPlayerBase);
 
-    // Restore RAX/EAX before executing the original instruction.
     code[offset++] = 0x58;
 
-    // mov [rdi+000005DC], eax (original instruction from Broforce.CT)
-    memcpy(code + offset, g_playerHookOriginal, originalSize);
+    // Original: mov [rdi+000005DC],eax
+    memcpy(code + offset, g_monoPlayerHookOriginal, originalSize);
     offset += originalSize;
 
-    // mov rax, injectPoint + 6; jmp rax
-    code[offset++] = 0x48;
-    code[offset++] = 0xB8;
+    // jmp qword ptr [rip+0]; dq injectPoint + 6
+    BYTE jumpBack[] = { 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00 };
+    memcpy(code + offset, jumpBack, sizeof(jumpBack));
+    offset += sizeof(jumpBack);
     *(uintptr_t*)(code + offset) = injectPoint + originalSize;
     offset += sizeof(uintptr_t);
-    code[offset++] = 0xFF;
-    code[offset++] = 0xE0;
 
     DWORD oldProtect;
     if (!VirtualProtect((void*)injectPoint, originalSize, PAGE_EXECUTE_READWRITE, &oldProtect)) {
-        VirtualFree(g_playerHookCode, 0, MEM_RELEASE);
-        g_playerHookCode = nullptr;
-        Logf("[AOB] 修改注入点内存保护失败，错误码: %lu", GetLastError());
+        VirtualFree(g_monoPlayerHookCode, 0, MEM_RELEASE);
+        g_monoPlayerHookCode = nullptr;
+        Logf("[MonoModule] 修改 Mono 注入点内存保护失败，错误码: %lu", GetLastError());
+        return false;
+    }
+
+    if (!IsRel32Reachable(injectPoint, (uintptr_t)g_monoPlayerHookCode)) {
+        VirtualProtect((void*)injectPoint, originalSize, oldProtect, &oldProtect);
+        VirtualFree(g_monoPlayerHookCode, 0, MEM_RELEASE);
+        g_monoPlayerHookCode = nullptr;
+        Log("[MonoModule] Mono newmem 超出 ±2GB，Hook 未安装");
         return false;
     }
 
     BYTE patch[originalSize] = { 0xE9, 0, 0, 0, 0, 0x90 };
-    uintptr_t relativeDetour = (uintptr_t)g_playerHookCode - injectPoint - 5;
-    if (!IsRel32Reachable(injectPoint, (uintptr_t)g_playerHookCode)) {
+    *(int32_t*)(patch + 1) = (int32_t)((uintptr_t)g_monoPlayerHookCode - injectPoint - 5);
+    memcpy((void*)injectPoint, patch, sizeof(patch));
+    VirtualProtect((void*)injectPoint, originalSize, oldProtect, &oldProtect);
+    FlushInstructionCache(GetCurrentProcess(), (void*)injectPoint, originalSize);
+
+    g_monoPlayerHookTarget = (void*)injectPoint;
+    g_monoPlayerHookInstalled = true;
+    Log("[MonoModule] Broforce 玩家基址 Hook 安装成功；使用一次特殊弹药后应捕获 player base");
+    return true;
+}
+
+void RemoveBroforceMonoPlayerHook() {
+    if (!g_monoPlayerHookInstalled || !g_monoPlayerHookTarget) {
+        return;
+    }
+
+    DWORD oldProtect;
+    if (VirtualProtect(g_monoPlayerHookTarget, sizeof(g_monoPlayerHookOriginal), PAGE_EXECUTE_READWRITE, &oldProtect)) {
+        memcpy(g_monoPlayerHookTarget, g_monoPlayerHookOriginal, sizeof(g_monoPlayerHookOriginal));
+        VirtualProtect(g_monoPlayerHookTarget, sizeof(g_monoPlayerHookOriginal), oldProtect, &oldProtect);
+        FlushInstructionCache(GetCurrentProcess(), g_monoPlayerHookTarget, sizeof(g_monoPlayerHookOriginal));
+    }
+
+    if (g_monoPlayerHookCode) {
+        VirtualFree(g_monoPlayerHookCode, 0, MEM_RELEASE);
+        g_monoPlayerHookCode = nullptr;
+    }
+
+    g_monoPlayerHookTarget = nullptr;
+    g_monoPlayerHookInstalled = false;
+}
+
+void ProbeBroforceMonoMethod() {
+    g_monoProbeActive = true;
+    Log("[MonoModule] 开始通过 Mono 查询 Broforce TestVanDammeAnim:set_SpecialAmmo");
+
+    HMODULE monoModule = LoadMonoModuleManaged();
+    if (!monoModule) {
+        snprintf(g_monoProbeSummary, sizeof(g_monoProbeSummary),
+            "MonoModule.dll 加载失败，错误码=%lu", GetLastError());
+        Log(g_monoProbeSummary);
+        g_monoProbeFinished = true;
+        g_monoProbeActive = false;
+        return;
+    }
+
+    using InitializeFn = int(__cdecl*)(const char*);
+    using GetLastErrorFn = const char*(__cdecl*)();
+    using GetManagedDirectoryFn = const char*(__cdecl*)();
+    using FindClassFn = uintptr_t(__cdecl*)(const char*, const char*, const char*);
+    using FindMethodFn = uintptr_t(__cdecl*)(uintptr_t, const char*, int);
+    using GetMethodAddressByNameFn = uintptr_t(__cdecl*)(const char*, const char*, const char*, const char*, int);
+
+    auto monoInitialize = (InitializeFn)GetProcAddress(monoModule, "MonoModule_Initialize");
+    auto monoGetLastError = (GetLastErrorFn)GetProcAddress(monoModule, "MonoModule_GetLastError");
+    auto monoGetManagedDirectory = (GetManagedDirectoryFn)GetProcAddress(monoModule, "MonoModule_GetManagedDirectory");
+    auto monoFindClass = (FindClassFn)GetProcAddress(monoModule, "MonoModule_FindClass");
+    auto monoFindMethod = (FindMethodFn)GetProcAddress(monoModule, "MonoModule_FindMethod");
+    auto monoGetMethodAddressByName = (GetMethodAddressByNameFn)GetProcAddress(monoModule, "MonoModule_GetMethodAddressByName");
+
+    if (!monoInitialize || !monoGetLastError || !monoGetManagedDirectory || !monoFindClass || !monoFindMethod || !monoGetMethodAddressByName) {
+        snprintf(g_monoProbeSummary, sizeof(g_monoProbeSummary),
+            "MonoModule.dll 导出不完整，请先重新编译 MonoModule.dll");
+        Log(g_monoProbeSummary);
+        g_monoProbeFinished = true;
+        g_monoProbeActive = false;
+        return;
+    }
+
+    monoInitialize(Config::Instance().Path());
+    const char* managedDir = monoGetManagedDirectory();
+    Logf("[MonoModule] Managed目录: %s", managedDir && *managedDir ? managedDir : "未检测到/未配置");
+
+    const char* assemblies[] = { "Assembly-CSharp.dll", "Assembly-CSharp" };
+    uintptr_t klass = 0;
+    uintptr_t method = 0;
+    uintptr_t methodAddress = 0;
+    const char* usedAssembly = nullptr;
+
+    for (const char* assembly : assemblies) {
+        klass = monoFindClass(assembly, "", "TestVanDammeAnim");
+        if (!klass) {
+            Logf("[MonoModule] %s 里没有找到 TestVanDammeAnim: %s", assembly, monoGetLastError());
+            continue;
+        }
+
+        method = monoFindMethod(klass, "set_SpecialAmmo", 1);
+        if (!method) {
+            Logf("[MonoModule] TestVanDammeAnim:set_SpecialAmmo 没找到: %s", monoGetLastError());
+            continue;
+        }
+
+        methodAddress = monoGetMethodAddressByName(assembly, "", "TestVanDammeAnim", "set_SpecialAmmo", 1);
+        if (methodAddress) {
+            usedAssembly = assembly;
+            break;
+        }
+
+        Logf("[MonoModule] mono_compile_method 失败: %s", monoGetLastError());
+    }
+
+    if (!methodAddress) {
+        snprintf(g_monoProbeSummary, sizeof(g_monoProbeSummary),
+            "Mono 找不到 TestVanDammeAnim:set_SpecialAmmo。最后错误: %s", monoGetLastError());
+        Log(g_monoProbeSummary);
+        g_monoProbeFinished = true;
+        g_monoProbeActive = false;
+        return;
+    }
+
+    const BYTE pattern[] = { 0x89, 0x87, 0xDC, 0x05, 0x00, 0x00 };
+    const char* mask = "xxxxxx";
+    uintptr_t injectPoint = ScanNear(methodAddress, 0x200, pattern, mask);
+
+    g_monoSetSpecialAmmoMethod = methodAddress;
+    g_monoSetSpecialAmmoInjectPoint = injectPoint ? injectPoint : methodAddress + 0x31;
+    g_monoProbeSucceeded = injectPoint != 0;
+    if (g_monoProbeSucceeded) {
+        g_aobScanActive = false;
+        InstallBroforceMonoPlayerHook(g_monoSetSpecialAmmoInjectPoint);
+    }
+    g_monoProbeFinished = true;
+    g_monoProbeActive = false;
+
+    snprintf(g_monoProbeSummary, sizeof(g_monoProbeSummary),
+        "Mono已拿到 %s!TestVanDammeAnim:set_SpecialAmmo 方法=0x%p，CE +31 位置=0x%p，特征%s",
+        usedAssembly ? usedAssembly : "Assembly-CSharp",
+        (void*)g_monoSetSpecialAmmoMethod,
+        (void*)g_monoSetSpecialAmmoInjectPoint,
+        injectPoint ? "匹配 89 87 DC 05 00 00" : "未在前0x200字节内匹配，暂按 method+0x31 显示");
+    Log(g_monoProbeSummary);
+}
+
+bool InstallUserDataHook(uintptr_t injectPoint) {
+    constexpr size_t originalSize = sizeof(g_userDataHookOriginal);
+    constexpr size_t codeSize = 96;
+
+    Logf("[AOB] 找到 Dojo NTR.CT 注入点: 0x%p", (void*)injectPoint);
+    Logf("[AOB] 原始 10 字节: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
+        *(BYTE*)injectPoint, *(BYTE*)(injectPoint + 1), *(BYTE*)(injectPoint + 2), *(BYTE*)(injectPoint + 3), *(BYTE*)(injectPoint + 4),
+        *(BYTE*)(injectPoint + 5), *(BYTE*)(injectPoint + 6), *(BYTE*)(injectPoint + 7), *(BYTE*)(injectPoint + 8), *(BYTE*)(injectPoint + 9));
+
+    g_userDataHookCode = AllocateNear(injectPoint, codeSize);
+    if (!g_userDataHookCode) {
+        Log("[AOB] 无法在注入点 ±2GB 内分配 newmem，5 字节 jmp 跳不到，Hook 未安装");
+        return false;
+    }
+
+    Logf("[AOB] newmem 分配成功: 0x%p", g_userDataHookCode);
+    memcpy(g_userDataHookOriginal, (void*)injectPoint, originalSize);
+
+    BYTE* code = (BYTE*)g_userDataHookCode;
+    size_t offset = 0;
+
+    // push rdx
+    code[offset++] = 0x52;
+
+    // mov rdx, &g_capturedUserDataBase
+    code[offset++] = 0x48;
+    code[offset++] = 0xBA;
+    *(uintptr_t*)(code + offset) = (uintptr_t)&g_capturedUserDataBase;
+    offset += sizeof(uintptr_t);
+
+    // mov [rdx], rax
+    BYTE movCapturedBase[] = { 0x48, 0x89, 0x02 };
+    memcpy(code + offset, movCapturedBase, sizeof(movCapturedBase));
+    offset += sizeof(movCapturedBase);
+
+    // pop rdx
+    code[offset++] = 0x5A;
+
+    // Original Dojo NTR.CT instructions:
+    // mov [r8],rax
+    BYTE movUserData[] = { 0x49, 0x89, 0x00 };
+    memcpy(code + offset, movUserData, sizeof(movUserData));
+    offset += sizeof(movUserData);
+
+    // The second original instruction is RIP-relative:
+    // mov rcx,[GameAssembly.dll+3284F48]
+    // Do not copy its raw bytes into newmem, otherwise RIP will be relative to newmem and crash.
+    int32_t rcxDisplacement = *(int32_t*)(g_userDataHookOriginal + 6);
+    uintptr_t rcxSourceAddress = injectPoint + originalSize + rcxDisplacement;
+    Logf("[AOB] 修正 RIP 相对寻址: rcx source=0x%p", (void*)rcxSourceAddress);
+
+    // push r11; mov r11, rcxSourceAddress; mov rcx,[r11]; pop r11
+    BYTE pushR11[] = { 0x41, 0x53 };
+    memcpy(code + offset, pushR11, sizeof(pushR11));
+    offset += sizeof(pushR11);
+    code[offset++] = 0x49;
+    code[offset++] = 0xBB;
+    *(uintptr_t*)(code + offset) = rcxSourceAddress;
+    offset += sizeof(uintptr_t);
+    BYTE movRcxFromR11[] = { 0x49, 0x8B, 0x0B };
+    memcpy(code + offset, movRcxFromR11, sizeof(movRcxFromR11));
+    offset += sizeof(movRcxFromR11);
+    BYTE popR11[] = { 0x41, 0x5B };
+    memcpy(code + offset, popR11, sizeof(popR11));
+    offset += sizeof(popR11);
+
+    // jmp qword ptr [rip+0]; dq injectPoint + 10
+    // This returns without clobbering any general-purpose register.
+    BYTE jumpBack[] = { 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00 };
+    memcpy(code + offset, jumpBack, sizeof(jumpBack));
+    offset += sizeof(jumpBack);
+    *(uintptr_t*)(code + offset) = injectPoint + originalSize;
+    offset += sizeof(uintptr_t);
+
+    DWORD oldProtect;
+    if (!VirtualProtect((void*)injectPoint, originalSize, PAGE_EXECUTE_READWRITE, &oldProtect)) {
+        VirtualFree(g_userDataHookCode, 0, MEM_RELEASE);
+        g_userDataHookCode = nullptr;
+        Logf("[AOB] 修改注入点内存保护失败，错误码: %lu", GetLastError());
+        return false;
+    }
+
+    BYTE patch[originalSize] = { 0xE9, 0, 0, 0, 0, 0x90, 0x90, 0x90, 0x90, 0x90 };
+    uintptr_t relativeDetour = (uintptr_t)g_userDataHookCode - injectPoint - 5;
+    if (!IsRel32Reachable(injectPoint, (uintptr_t)g_userDataHookCode)) {
         VirtualProtect((void*)injectPoint, originalSize, oldProtect, &oldProtect);
-        VirtualFree(g_playerHookCode, 0, MEM_RELEASE);
-        g_playerHookCode = nullptr;
+        VirtualFree(g_userDataHookCode, 0, MEM_RELEASE);
+        g_userDataHookCode = nullptr;
         Log("[AOB] newmem 距离注入点超过 ±2GB，5 字节 jmp 无效，Hook 未安装");
         return false;
     }
@@ -488,57 +699,67 @@ bool InstallPlayerBaseHook(uintptr_t injectPoint) {
     VirtualProtect((void*)injectPoint, originalSize, oldProtect, &oldProtect);
     FlushInstructionCache(GetCurrentProcess(), (void*)injectPoint, originalSize);
 
-    g_playerHookTarget = (void*)injectPoint;
-    g_playerHookInstalled = true;
-    Log("[AOB] 玩家基址 Hook 安装成功：已写入 jmp newmem + nop");
-    Log("[AOB] 现在进入关卡/使用技能或等待游戏调用 set_SpecialAmmo，控制台应打印玩家基址");
+    g_userDataHookTarget = (void*)injectPoint;
+    g_userDataHookInstalled = true;
+    Log("[AOB] UserData 基址 Hook 安装成功：已写入 jmp newmem + nop");
+    Log("[AOB] 现在进入游戏/读档，等待 SaveData.InitUser 附近代码执行并捕获 UserData 基址");
     return true;
 }
 
-void RemovePlayerBaseHook() {
-    if (!g_playerHookInstalled || !g_playerHookTarget) {
+void RemoveUserDataHook() {
+    if (!g_userDataHookInstalled || !g_userDataHookTarget) {
         return;
     }
 
     DWORD oldProtect;
-    if (VirtualProtect(g_playerHookTarget, sizeof(g_playerHookOriginal), PAGE_EXECUTE_READWRITE, &oldProtect)) {
-        memcpy(g_playerHookTarget, g_playerHookOriginal, sizeof(g_playerHookOriginal));
-        VirtualProtect(g_playerHookTarget, sizeof(g_playerHookOriginal), oldProtect, &oldProtect);
-        FlushInstructionCache(GetCurrentProcess(), g_playerHookTarget, sizeof(g_playerHookOriginal));
+    if (VirtualProtect(g_userDataHookTarget, sizeof(g_userDataHookOriginal), PAGE_EXECUTE_READWRITE, &oldProtect)) {
+        memcpy(g_userDataHookTarget, g_userDataHookOriginal, sizeof(g_userDataHookOriginal));
+        VirtualProtect(g_userDataHookTarget, sizeof(g_userDataHookOriginal), oldProtect, &oldProtect);
+        FlushInstructionCache(GetCurrentProcess(), g_userDataHookTarget, sizeof(g_userDataHookOriginal));
     }
 
-    if (g_playerHookCode) {
-        VirtualFree(g_playerHookCode, 0, MEM_RELEASE);
-        g_playerHookCode = nullptr;
+    if (g_userDataHookCode) {
+        VirtualFree(g_userDataHookCode, 0, MEM_RELEASE);
+        g_userDataHookCode = nullptr;
     }
 
-    g_playerHookTarget = nullptr;
-    g_playerHookInstalled = false;
+    g_userDataHookTarget = nullptr;
+    g_userDataHookInstalled = false;
 }
 
 void AOBScanThread() {
-    const BYTE pattern[] = { 0x89, 0x87, 0xDC, 0x05, 0x00, 0x00 };
-    const char* mask = "xxxxxx";
+    const BYTE pattern[] = { 0x49, 0x89, 0x00, 0x48, 0x8B, 0x0D, 0x5E, 0x0D, 0xE1, 0x02 };
+    const char* mask = "xxxxxxxxxx";
 
     g_aobScanActive = true;
     g_aobScanFinished = false;
-    Log("[AOB] 开始持续扫描 Mono/JIT 可执行内存：89 87 DC 05 00 00");
-    Log("[AOB] 说明：CT 的注入点是 TestVanDammeAnim:set_SpecialAmmo，这是 Mono JIT 代码，通常不会在游戏 EXE 主模块里一开始就出现");
+    Log("[AOB] 开始持续扫描 GameAssembly.dll：49 89 00 48 8B 0D 5E 0D E1 02");
+    Log("[AOB] 说明：该特征码来自 Dojo NTR.CT 的 SaveData.InitUser 附近，用于捕获 UserData 基址");
 
-    while (g_aobScanActive && !g_playerHookInstalled) {
+    while (g_aobScanActive && !g_userDataHookInstalled) {
         ++g_aobScanAttempts;
-        uintptr_t injectPoint = ScanExecutableMemory(pattern, mask);
 
+        uintptr_t moduleBase = Memory::GetModuleBase("GameAssembly.dll");
+        size_t moduleSize = Memory::GetModuleSize("GameAssembly.dll");
+        if (!moduleBase || !moduleSize) {
+            if (g_aobScanAttempts == 1 || g_aobScanAttempts % 5 == 0) {
+                Logf("[AOB] 第 %d 次扫描：GameAssembly.dll 尚未加载", g_aobScanAttempts);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            continue;
+        }
+
+        uintptr_t injectPoint = Memory::ScanPattern(moduleBase, moduleSize, pattern, mask);
         if (injectPoint) {
             Logf("[AOB] 第 %d 次扫描找到 CT 特征码，地址=0x%p", g_aobScanAttempts, (void*)injectPoint);
-            if (!InstallPlayerBaseHook(injectPoint)) {
+            if (!InstallUserDataHook(injectPoint)) {
                 Log("[AOB] 找到了特征码但 Hook 安装失败，停止持续扫描，避免反复修改内存");
             }
             break;
         }
 
         if (g_aobScanAttempts == 1 || g_aobScanAttempts % 5 == 0) {
-            Logf("[AOB] 第 %d 次扫描仍未找到；请进入关卡/切换角色/使用一次特殊弹药，让 Mono 编译 set_SpecialAmmo", g_aobScanAttempts);
+            Logf("[AOB] 第 %d 次扫描仍未找到；请进入游戏/读档触发 UserData 初始化", g_aobScanAttempts);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -582,7 +803,6 @@ HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT syncInterval, U
         GUI::Instance().Initialize(g_gameHwnd, g_device, g_deviceContext);
         Cheat::Instance().Initialize();
 
-        // Use SetWindowLongPtrW for Unicode windows
         GUI::s_originalWndProc = (WNDPROC)SetWindowLongPtrW(g_gameHwnd, GWLP_WNDPROC, (LONG_PTR)GUI::WndProc);
         Logf("[窗口] WndProc Hook 完成，原窗口过程=0x%p", GUI::s_originalWndProc);
 
@@ -590,16 +810,23 @@ HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT syncInterval, U
         Log("[DX11] ImGui 初始化完成");
     }
 
-    if (g_capturedPlayerBase) {
-        Cheat::Instance().SetPlayerBase(g_capturedPlayerBase);
-        ApplyConfiguredLocks(g_capturedPlayerBase);
-        if (!g_loggedPlayerBase) {
-            Logf("[玩家基址] 捕获成功: 0x%p，GUI 已停止等待", (void*)g_capturedPlayerBase);
-            g_loggedPlayerBase = true;
+    if (g_monoCapturedPlayerBase) {
+        Cheat::Instance().SetUserDataBase(g_monoCapturedPlayerBase);
+        if (!g_loggedMonoPlayerBase) {
+            Logf("[MonoModule] Broforce player base 捕获成功: 0x%p；已停止等待 Dojo UserData/AOB", (void*)g_monoCapturedPlayerBase);
+            g_loggedMonoPlayerBase = true;
         }
     }
 
-    // Pass render target view to GUI
+    if (!g_monoProbeSucceeded && g_capturedUserDataBase) {
+        Cheat::Instance().SetUserDataBase(g_capturedUserDataBase);
+        ApplyConfiguredLocks(g_capturedUserDataBase);
+        if (!g_loggedUserDataBase) {
+            Logf("[UserData] 捕获成功: 0x%p，GUI 已停止等待", (void*)g_capturedUserDataBase);
+            g_loggedUserDataBase = true;
+        }
+    }
+
     GUI::Instance().SetRenderTargetView(g_renderTargetView);
     GUI::Instance().Render();
 
@@ -628,12 +855,25 @@ HRESULT __stdcall HookedResizeBuffers(IDXGISwapChain* pSwapChain, UINT bufferCou
 }
 
 DWORD WINAPI UnloadThread(LPVOID) {
-    // Let the ImGui button frame return to the original Present before unpatching vtables.
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    Log("[卸载] 卸载线程已启动，正在停止后台任务");
+    g_aobScanActive = false;
 
-    for (int i = 0; i < 30 && !g_aobScanFinished; ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    for (int i = 0; i < 80 && !g_aobScanFinished; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
+    if (!g_aobScanFinished) {
+        Log("[卸载] AOB 扫描线程未及时结束，继续执行清理");
+    }
+
+    for (int i = 0; i < 80 && g_monoProbeActive; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    if (g_monoProbeActive) {
+        Log("[卸载] Mono 探测线程仍在运行，继续执行清理；请稍后确认模块是否释放");
+    }
+
+    // Let the current Present frame return before unpatching vtables and unloading this DLL.
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     CleanupTrainer();
 
@@ -645,6 +885,7 @@ DWORD WINAPI UnloadThread(LPVOID) {
         g_consoleAllocated = false;
     }
 
+    Log("[卸载] 调用 FreeLibraryAndExitThread，模块应该从进程中释放");
     if (module) {
         FreeLibraryAndExitThread(module, 0);
     }
@@ -655,6 +896,7 @@ DWORD WINAPI MainThread(LPVOID) {
     InitializeConsole();
     Config::Instance().Load();
     Log("[启动] DLL_PROCESS_ATTACH 已完成，主线程启动");
+    std::thread(ProbeBroforceMonoMethod).detach();
 
     Log("[DX11] 等待 d3d11.dll 加载...");
     while (!GetModuleHandleA("d3d11.dll")) {
@@ -677,14 +919,21 @@ DWORD WINAPI MainThread(LPVOID) {
     Logf("[DX11] Hook 安装成功：Present 原函数=0x%p，ResizeBuffers 原函数=0x%p",
         (void*)g_originalPresent, (void*)g_originalResizeBuffers);
 
-    uintptr_t moduleBase = Memory::GetModuleBase(nullptr);
-    size_t moduleSize = Memory::GetModuleSize(nullptr);
-    Logf("[AOB] 游戏主模块基址=0x%p，模块大小=0x%zX", (void*)moduleBase, moduleSize);
-    Log("[AOB] 主模块扫描跳过：CT 注入点属于 Mono/JIT 代码，不一定在 Broforce.exe 主模块里");
-    Log("[AOB] 改为后台持续扫描整个进程的可执行内存，直到 JIT 代码出现");
-    std::thread(AOBScanThread).detach();
+    for (int i = 0; i < 50 && !g_monoProbeFinished; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 
-    Log("[启动] 初始化结束：按 INSERT 打开菜单，控制台会显示扫描和玩家基址状态");
+    if (g_monoProbeSucceeded) {
+        Log("[AOB] Mono 已经定位 Broforce set_SpecialAmmo+31，跳过 GameAssembly/Dojo AOB 扫描");
+    } else {
+        uintptr_t moduleBase = Memory::GetModuleBase("GameAssembly.dll");
+        size_t moduleSize = Memory::GetModuleSize("GameAssembly.dll");
+        Logf("[AOB] GameAssembly.dll 基址=0x%p，模块大小=0x%zX", (void*)moduleBase, moduleSize);
+        Log("[AOB] Mono 未定位到目标方法，才回退后台扫描 GameAssembly.dll");
+        std::thread(AOBScanThread).detach();
+    }
+
+    Log("[启动] 初始化结束：按 INSERT 打开菜单，日志会显示 Mono/AOB 状态");
     return 0;
 }
 
@@ -696,6 +945,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID) {
         Log("DLL_PROCESS_ATTACH");
         HANDLE thread = CreateThread(nullptr, 0, MainThread, nullptr, 0, nullptr);
         if (thread) {
+            g_mainThreadId = GetThreadId(thread);
             CloseHandle(thread);
         }
         break;

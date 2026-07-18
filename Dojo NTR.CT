@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CheatTable CheatEngineTableVersion="46">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>2</ID>
+      <Description>"激活User_Data人造指针"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>{ Game   : Dojo NTR.exe
+  Version: 
+  Date   : 2026-07-17
+  Author : ������
+
+  This script does blah blah blah
+}
+
+[ENABLE]
+
+aobscanmodule(INJECT,GameAssembly.dll,49 89 00 48 8B 0D 5E 0D E1 02) // should be unique
+alloc(newmem,$1000,INJECT)
+alloc(user_data_base_address,2048)
+registersymbol(user_data_base_address)
+label(code)
+label(return)
+
+newmem:
+  mov [user_data_base_address],rax
+  mov [r8],rax
+  mov rcx,[GameAssembly.dll+3284F48]
+code:
+  mov [r8],rax
+  mov rcx,[GameAssembly.dll+3284F48]
+  jmp return
+
+INJECT:
+  jmp newmem
+  nop 5
+return:
+registersymbol(INJECT)
+
+[DISABLE]
+
+INJECT:
+  db 49 89 00 48 8B 0D 5E 0D E1 02
+dealloc(user_data_base_address)
+unregistersymbol(user_data_base_address)
+unregistersymbol(INJECT)
+dealloc(newmem)
+
+{
+// ORIGINAL CODE - INJECTION POINT: GameAssembly.dll+4741E0
+
+GameAssembly.dll+4741B6: 48 8B C8              - mov rcx,rax
+GameAssembly.dll+4741B9: E8 62 A7 28 00        - call ES3.FileExists
+GameAssembly.dll+4741BE: 45 33 C0              - xor r8d,r8d
+GameAssembly.dll+4741C1: 40 0F B6 D6           - movzx edx,sil
+GameAssembly.dll+4741C5: 8B CF                 - mov ecx,edi
+GameAssembly.dll+4741C7: 0F B6 D8              - movzx ebx,al
+GameAssembly.dll+4741CA: E8 11 FE FF FF        - call SaveData.InitUser
+GameAssembly.dll+4741CF: 48 8B 15 72 0D E1 02  - mov rdx,[GameAssembly.dll+3284F48]
+GameAssembly.dll+4741D6: 4C 8B 82 B8 00 00 00  - mov r8,[rdx+000000B8]
+GameAssembly.dll+4741DD: 48 8B D0              - mov rdx,rax
+// ---------- INJECTING HERE ----------
+GameAssembly.dll+4741E0: 49 89 00              - mov [r8],rax
+// ---------- DONE INJECTING  ----------
+GameAssembly.dll+4741E3: 48 8B 0D 5E 0D E1 02  - mov rcx,[GameAssembly.dll+3284F48]
+GameAssembly.dll+4741EA: 48 8B 89 B8 00 00 00  - mov rcx,[rcx+000000B8]
+GameAssembly.dll+4741F1: E8 5A BD F3 FF        - call GameAssembly.mono_type_is_struct+62C0
+GameAssembly.dll+4741F6: 80 F3 01              - xor bl,01
+GameAssembly.dll+4741F9: 33 D2                 - xor edx,edx
+GameAssembly.dll+4741FB: 40 0A DE              - or bl,sil
+GameAssembly.dll+4741FE: 0F B6 CB              - movzx ecx,bl
+GameAssembly.dll+474201: 48 8B 5C 24 30        - mov rbx,[rsp+30]
+GameAssembly.dll+474206: 48 8B 74 24 38        - mov rsi,[rsp+38]
+GameAssembly.dll+47420B: 48 83 C4 20           - add rsp,20
+}
+</AssemblerScript>
+      <CheatEntries>
+        <CheatEntry>
+          <ID>3</ID>
+          <Description>"当前的User_Data基址"</Description>
+          <ShowAsHex>1</ShowAsHex>
+          <ShowAsSigned>0</ShowAsSigned>
+          <VariableType>8 Bytes</VariableType>
+          <Address>user_data_base_address</Address>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>4</ID>
+          <Description>"金币数值"</Description>
+          <ShowAsSigned>0</ShowAsSigned>
+          <VariableType>4 Bytes</VariableType>
+          <Address>user_data_base_address</Address>
+          <Offsets>
+            <Offset>10</Offset>
+            <Offset>0x98</Offset>
+          </Offsets>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>5</ID>
+          <Description>"小时"</Description>
+          <VariableType>4 Bytes</VariableType>
+          <Address>user_data_base_address</Address>
+          <Offsets>
+            <Offset>24</Offset>
+          </Offsets>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>6</ID>
+          <Description>"天数"</Description>
+          <VariableType>4 Bytes</VariableType>
+          <Address>user_data_base_address</Address>
+          <Offsets>
+            <Offset>20</Offset>
+          </Offsets>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>7</ID>
+          <Description>"分钟"</Description>
+          <VariableType>4 Bytes</VariableType>
+          <Address>user_data_base_address</Address>
+          <Offsets>
+            <Offset>28</Offset>
+          </Offsets>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>8</ID>
+          <Description>"渔币"</Description>
+          <VariableType>4 Bytes</VariableType>
+          <Address>user_data_base_address</Address>
+          <Offsets>
+            <Offset>90</Offset>
+          </Offsets>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>9</ID>
+          <Description>"能量"</Description>
+          <VariableType>4 Bytes</VariableType>
+          <Address>user_data_base_address</Address>
+          <Offsets>
+            <Offset>50</Offset>
+          </Offsets>
+        </CheatEntry>
+      </CheatEntries>
+    </CheatEntry>
+  </CheatEntries>
+  <UserdefinedSymbols/>
+  <Structures StructVersion="2">
+    <Structure Name="UserData" AutoFill="0" AutoCreate="1" DefaultHex="0" AutoDestroy="0" DoNotSaveLocal="0" RLECompression="1" AutoCreateStructsize="4096">
+      <Elements>
+        <Element Offset="16" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000010" Description="difficulty" DisplayMethod="unsigned integer"/>
+        <Element Offset="24" Vartype="Pointer" Bytesize="8" OffsetHex="00000018" Description="date" DisplayMethod="unsigned integer"/>
+        <Element Offset="32" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000020" Description="day" DisplayMethod="unsigned integer"/>
+        <Element Offset="36" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000024" Description="hour" DisplayMethod="unsigned integer"/>
+        <Element Offset="40" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000028" Description="minute" DisplayMethod="unsigned integer"/>
+        <Element Offset="44" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000002C" Description="sex_level" DisplayMethod="unsigned integer"/>
+        <Element Offset="48" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000030" Description="power_level" DisplayMethod="unsigned integer"/>
+        <Element Offset="52" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000034" Description="power_exp" DisplayMethod="unsigned integer"/>
+        <Element Offset="56" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000038" Description="skill_level" DisplayMethod="unsigned integer"/>
+        <Element Offset="60" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000003C" Description="skill_exp" DisplayMethod="unsigned integer"/>
+        <Element Offset="64" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000040" Description="work_level" DisplayMethod="unsigned integer"/>
+        <Element Offset="68" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000044" Description="game_pizhuan_level" DisplayMethod="unsigned integer"/>
+        <Element Offset="72" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000048" Description="game_caoren_level" DisplayMethod="unsigned integer"/>
+        <Element Offset="76" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000004C" Description="game_dubo_level" DisplayMethod="unsigned integer"/>
+        <Element Offset="80" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000050" Description="energy" DisplayMethod="unsigned integer"/>
+        <Element Offset="84" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000054" Description="extend_count" DisplayMethod="unsigned integer"/>
+        <Element Offset="88" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000058" Description="game_pizhuan_count" DisplayMethod="unsigned integer"/>
+        <Element Offset="92" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000005C" Description="game_caoren_count" DisplayMethod="unsigned integer"/>
+        <Element Offset="96" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000060" Description="clothing_status" DisplayMethod="unsigned integer"/>
+        <Element Offset="100" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000064" Description="game_banzhuan_count" DisplayMethod="unsigned integer"/>
+        <Element Offset="104" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000068" Description="game_wadi_count" DisplayMethod="unsigned integer"/>
+        <Element Offset="112" Vartype="Pointer" Bytesize="8" OffsetHex="00000070" Description="start_date_time" DisplayMethod="unsigned integer"/>
+        <Element Offset="120" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000078" Description="cur_location" DisplayMethod="unsigned integer"/>
+        <Element Offset="124" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000007C" Description="last_location" DisplayMethod="unsigned integer"/>
+        <Element Offset="128" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000080" Description="next_location" DisplayMethod="unsigned integer"/>
+        <Element Offset="136" Vartype="Pointer" Bytesize="8" OffsetHex="00000088" Description="get_coin_ids" DisplayMethod="unsigned integer"/>
+        <Element Offset="144" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000090" Description="fish_coin" DisplayMethod="unsigned integer"/>
+        <Element Offset="152" Vartype="Pointer" Bytesize="8" OffsetHex="00000098" Description="coin" DisplayMethod="unsigned integer"/>
+        <Element Offset="160" Vartype="Pointer" Bytesize="8" OffsetHex="000000A0" Description="exp" DisplayMethod="unsigned integer"/>
+        <Element Offset="168" Vartype="Pointer" Bytesize="8" OffsetHex="000000A8" Description="goods" DisplayMethod="unsigned integer"/>
+        <Element Offset="176" Vartype="4 Bytes" Bytesize="4" OffsetHex="000000B0" Description="teach_step" DisplayMethod="unsigned integer"/>
+        <Element Offset="184" Vartype="Pointer" Bytesize="8" OffsetHex="000000B8" Description="hero_datas" DisplayMethod="unsigned integer"/>
+        <Element Offset="192" Vartype="Pointer" Bytesize="8" OffsetHex="000000C0" Description="male_role_datas" DisplayMethod="unsigned integer"/>
+        <Element Offset="200" Vartype="Pointer" Bytesize="8" OffsetHex="000000C8" Description="goods_remaining_count" DisplayMethod="unsigned integer"/>
+        <Element Offset="208" Vartype="Pointer" Bytesize="8" OffsetHex="000000D0" Description="role_data_301" DisplayMethod="unsigned integer"/>
+        <Element Offset="216" Vartype="Pointer" Bytesize="8" OffsetHex="000000D8" Description="role_data_701" DisplayMethod="unsigned integer"/>
+        <Element Offset="224" Vartype="4 Bytes" Bytesize="4" OffsetHex="000000E0" Description="show_201_step" DisplayMethod="unsigned integer"/>
+        <Element Offset="228" Vartype="4 Bytes" Bytesize="4" OffsetHex="000000E4" Description="show_401_step" DisplayMethod="unsigned integer"/>
+        <Element Offset="232" Vartype="4 Bytes" Bytesize="4" OffsetHex="000000E8" Description="result_401" DisplayMethod="unsigned integer"/>
+        <Element Offset="240" Vartype="Pointer" Bytesize="8" OffsetHex="000000F0" Description="appear_401_day" DisplayMethod="unsigned integer"/>
+        <Element Offset="248" Vartype="4 Bytes" Bytesize="4" OffsetHex="000000F8" Description="success_401_count" DisplayMethod="unsigned integer"/>
+        <Element Offset="256" Vartype="Pointer" Bytesize="8" OffsetHex="00000100" Description="h_videos" DisplayMethod="unsigned integer"/>
+        <Element Offset="264" Vartype="Byte" Bytesize="1" OffsetHex="00000108" Description="ph_talk" DisplayMethod="unsigned integer"/>
+        <Element Offset="272" Vartype="Pointer" Bytesize="8" OffsetHex="00000110" Description="bit_stamina" DisplayMethod="unsigned integer"/>
+        <Element Offset="280" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000118" Description="work_reward_day" DisplayMethod="unsigned integer"/>
+        <Element Offset="284" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000011C" Description="work_coin" DisplayMethod="unsigned integer"/>
+        <Element Offset="288" Vartype="Byte" Bytesize="1" OffsetHex="00000120" Description="master_dialog" DisplayMethod="unsigned integer"/>
+        <Element Offset="292" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000124" Description="get_fish_count" DisplayMethod="unsigned integer"/>
+        <Element Offset="296" Vartype="Byte" Bytesize="1" OffsetHex="00000128" Description="is_clear" DisplayMethod="unsigned integer"/>
+        <Element Offset="300" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000012C" Description="clear_step" DisplayMethod="unsigned integer"/>
+        <Element Offset="304" Vartype="Pointer" Bytesize="8" OffsetHex="00000130" Description="click_decoration_ids" DisplayMethod="unsigned integer"/>
+        <Element Offset="312" Vartype="Byte" Bytesize="1" OffsetHex="00000138" Description="skill_added" DisplayMethod="unsigned integer"/>
+        <Element Offset="313" Vartype="Byte" Bytesize="1" OffsetHex="00000139" Description="power_added" DisplayMethod="unsigned integer"/>
+        <Element Offset="316" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000013C" Description="total_add_money" DisplayMethod="unsigned integer"/>
+        <Element Offset="320" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000140" Description="total_consume_money" DisplayMethod="unsigned integer"/>
+        <Element Offset="324" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000144" Description="ending_type" DisplayMethod="unsigned integer"/>
+        <Element Offset="328" Vartype="Pointer" Bytesize="8" OffsetHex="00000148" Description="pizuan_success_mat" DisplayMethod="unsigned integer"/>
+        <Element Offset="336" Vartype="Pointer" Bytesize="8" OffsetHex="00000150" Description="caoren_success_mat" DisplayMethod="unsigned integer"/>
+        <Element Offset="344" Vartype="Pointer" Bytesize="8" OffsetHex="00000158" Description="fish_ids" DisplayMethod="unsigned integer"/>
+        <Element Offset="352" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000160" Description="total_work_coin" DisplayMethod="unsigned integer"/>
+        <Element Offset="356" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000164" Description="work_dis" DisplayMethod="unsigned integer"/>
+        <Element Offset="360" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000168" Description="total_work_dis" DisplayMethod="unsigned integer"/>
+        <Element Offset="364" Vartype="Byte" Bytesize="1" OffsetHex="0000016C" Description="fisrt_rika" DisplayMethod="unsigned integer"/>
+        <Element Offset="368" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000170" Description="fish_step_1" DisplayMethod="unsigned integer"/>
+        <Element Offset="372" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000174" Description="fish_step_2" DisplayMethod="unsigned integer"/>
+        <Element Offset="376" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000178" Description="fish_step_3" DisplayMethod="unsigned integer"/>
+        <Element Offset="380" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000017C" Description="total_failed_401_count" DisplayMethod="unsigned integer"/>
+        <Element Offset="384" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000180" Description="total_success_401_count" DisplayMethod="unsigned integer"/>
+        <Element Offset="388" Vartype="Byte" Bytesize="1" OffsetHex="00000184" Description="ph_wc" DisplayMethod="unsigned integer"/>
+        <Element Offset="392" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000188" Description="ph_wc_day" DisplayMethod="unsigned integer"/>
+        <Element Offset="396" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000018C" Description="ph_wc_hour" DisplayMethod="unsigned integer"/>
+      </Elements>
+    </Structure>
+    <Structure Name="unnamed structure" AutoFill="0" AutoCreate="1" DefaultHex="0" AutoDestroy="0" DoNotSaveLocal="0" RLECompression="1" AutoCreateStructsize="4096">
+      <Elements>
+        <Element Offset="0" Vartype="Pointer" Bytesize="8" OffsetHex="00000000" DisplayMethod="unsigned integer">
+          <Structure Name="UserData" AutoFill="0" AutoCreate="1" DefaultHex="0" AutoDestroy="0" DoNotSaveLocal="0" RLECompression="1" AutoCreateStructsize="4096">
+            <Elements>
+              <Element Offset="16" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000010" Description="difficulty" DisplayMethod="unsigned integer"/>
+              <Element Offset="24" Vartype="Pointer" Bytesize="8" OffsetHex="00000018" Description="date" DisplayMethod="unsigned integer"/>
+              <Element Offset="32" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000020" Description="day" DisplayMethod="unsigned integer"/>
+              <Element Offset="36" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000024" Description="hour" DisplayMethod="unsigned integer"/>
+              <Element Offset="40" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000028" Description="minute" DisplayMethod="unsigned integer"/>
+              <Element Offset="44" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000002C" Description="sex_level" DisplayMethod="unsigned integer"/>
+              <Element Offset="48" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000030" Description="power_level" DisplayMethod="unsigned integer"/>
+              <Element Offset="52" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000034" Description="power_exp" DisplayMethod="unsigned integer"/>
+              <Element Offset="56" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000038" Description="skill_level" DisplayMethod="unsigned integer"/>
+              <Element Offset="60" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000003C" Description="skill_exp" DisplayMethod="unsigned integer"/>
+              <Element Offset="64" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000040" Description="work_level" DisplayMethod="unsigned integer"/>
+              <Element Offset="68" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000044" Description="game_pizhuan_level" DisplayMethod="unsigned integer"/>
+              <Element Offset="72" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000048" Description="game_caoren_level" DisplayMethod="unsigned integer"/>
+              <Element Offset="76" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000004C" Description="game_dubo_level" DisplayMethod="unsigned integer"/>
+              <Element Offset="80" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000050" Description="energy" DisplayMethod="unsigned integer"/>
+              <Element Offset="84" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000054" Description="extend_count" DisplayMethod="unsigned integer"/>
+              <Element Offset="88" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000058" Description="game_pizhuan_count" DisplayMethod="unsigned integer"/>
+              <Element Offset="92" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000005C" Description="game_caoren_count" DisplayMethod="unsigned integer"/>
+              <Element Offset="96" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000060" Description="clothing_status" DisplayMethod="unsigned integer"/>
+              <Element Offset="100" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000064" Description="game_banzhuan_count" DisplayMethod="unsigned integer"/>
+              <Element Offset="104" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000068" Description="game_wadi_count" DisplayMethod="unsigned integer"/>
+              <Element Offset="112" Vartype="Pointer" Bytesize="8" OffsetHex="00000070" Description="start_date_time" DisplayMethod="unsigned integer"/>
+              <Element Offset="120" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000078" Description="cur_location" DisplayMethod="unsigned integer"/>
+              <Element Offset="124" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000007C" Description="last_location" DisplayMethod="unsigned integer"/>
+              <Element Offset="128" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000080" Description="next_location" DisplayMethod="unsigned integer"/>
+              <Element Offset="136" Vartype="Pointer" Bytesize="8" OffsetHex="00000088" Description="get_coin_ids" DisplayMethod="unsigned integer"/>
+              <Element Offset="144" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000090" Description="fish_coin" DisplayMethod="unsigned integer"/>
+              <Element Offset="152" Vartype="Pointer" Bytesize="8" OffsetHex="00000098" Description="coin" DisplayMethod="unsigned integer"/>
+              <Element Offset="160" Vartype="Pointer" Bytesize="8" OffsetHex="000000A0" Description="exp" DisplayMethod="unsigned integer"/>
+              <Element Offset="168" Vartype="Pointer" Bytesize="8" OffsetHex="000000A8" Description="goods" DisplayMethod="unsigned integer"/>
+              <Element Offset="176" Vartype="4 Bytes" Bytesize="4" OffsetHex="000000B0" Description="teach_step" DisplayMethod="unsigned integer"/>
+              <Element Offset="184" Vartype="Pointer" Bytesize="8" OffsetHex="000000B8" Description="hero_datas" DisplayMethod="unsigned integer"/>
+              <Element Offset="192" Vartype="Pointer" Bytesize="8" OffsetHex="000000C0" Description="male_role_datas" DisplayMethod="unsigned integer"/>
+              <Element Offset="200" Vartype="Pointer" Bytesize="8" OffsetHex="000000C8" Description="goods_remaining_count" DisplayMethod="unsigned integer"/>
+              <Element Offset="208" Vartype="Pointer" Bytesize="8" OffsetHex="000000D0" Description="role_data_301" DisplayMethod="unsigned integer"/>
+              <Element Offset="216" Vartype="Pointer" Bytesize="8" OffsetHex="000000D8" Description="role_data_701" DisplayMethod="unsigned integer"/>
+              <Element Offset="224" Vartype="4 Bytes" Bytesize="4" OffsetHex="000000E0" Description="show_201_step" DisplayMethod="unsigned integer"/>
+              <Element Offset="228" Vartype="4 Bytes" Bytesize="4" OffsetHex="000000E4" Description="show_401_step" DisplayMethod="unsigned integer"/>
+              <Element Offset="232" Vartype="4 Bytes" Bytesize="4" OffsetHex="000000E8" Description="result_401" DisplayMethod="unsigned integer"/>
+              <Element Offset="240" Vartype="Pointer" Bytesize="8" OffsetHex="000000F0" Description="appear_401_day" DisplayMethod="unsigned integer"/>
+              <Element Offset="248" Vartype="4 Bytes" Bytesize="4" OffsetHex="000000F8" Description="success_401_count" DisplayMethod="unsigned integer"/>
+              <Element Offset="256" Vartype="Pointer" Bytesize="8" OffsetHex="00000100" Description="h_videos" DisplayMethod="unsigned integer">
+                <Structure Name="List`1" AutoFill="0" AutoCreate="1" DefaultHex="0" AutoDestroy="0" DoNotSaveLocal="0" RLECompression="1" AutoCreateStructsize="4096">
+                  <Elements>
+                    <Element Offset="16" Vartype="Pointer" Bytesize="8" OffsetHex="00000010" Description="_items" DisplayMethod="unsigned integer"/>
+                    <Element Offset="24" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000018" Description="_size" DisplayMethod="unsigned integer"/>
+                    <Element Offset="28" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000001C" Description="_version" DisplayMethod="unsigned integer"/>
+                    <Element Offset="32" Vartype="Pointer" Bytesize="8" OffsetHex="00000020" Description="_syncRoot" DisplayMethod="unsigned integer"/>
+                  </Elements>
+                </Structure>
+              </Element>
+              <Element Offset="264" Vartype="Byte" Bytesize="1" OffsetHex="00000108" Description="ph_talk" DisplayMethod="unsigned integer"/>
+              <Element Offset="272" Vartype="Pointer" Bytesize="8" OffsetHex="00000110" Description="bit_stamina" DisplayMethod="unsigned integer"/>
+              <Element Offset="280" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000118" Description="work_reward_day" DisplayMethod="unsigned integer"/>
+              <Element Offset="284" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000011C" Description="work_coin" DisplayMethod="unsigned integer"/>
+              <Element Offset="288" Vartype="Byte" Bytesize="1" OffsetHex="00000120" Description="master_dialog" DisplayMethod="unsigned integer"/>
+              <Element Offset="292" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000124" Description="get_fish_count" DisplayMethod="unsigned integer"/>
+              <Element Offset="296" Vartype="Byte" Bytesize="1" OffsetHex="00000128" Description="is_clear" DisplayMethod="unsigned integer"/>
+              <Element Offset="300" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000012C" Description="clear_step" DisplayMethod="unsigned integer"/>
+              <Element Offset="304" Vartype="Pointer" Bytesize="8" OffsetHex="00000130" Description="click_decoration_ids" DisplayMethod="unsigned integer"/>
+              <Element Offset="312" Vartype="Byte" Bytesize="1" OffsetHex="00000138" Description="skill_added" DisplayMethod="unsigned integer"/>
+              <Element Offset="313" Vartype="Byte" Bytesize="1" OffsetHex="00000139" Description="power_added" DisplayMethod="unsigned integer"/>
+              <Element Offset="316" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000013C" Description="total_add_money" DisplayMethod="unsigned integer"/>
+              <Element Offset="320" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000140" Description="total_consume_money" DisplayMethod="unsigned integer"/>
+              <Element Offset="324" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000144" Description="ending_type" DisplayMethod="unsigned integer"/>
+              <Element Offset="328" Vartype="Pointer" Bytesize="8" OffsetHex="00000148" Description="pizuan_success_mat" DisplayMethod="unsigned integer"/>
+              <Element Offset="336" Vartype="Pointer" Bytesize="8" OffsetHex="00000150" Description="caoren_success_mat" DisplayMethod="unsigned integer"/>
+              <Element Offset="344" Vartype="Pointer" Bytesize="8" OffsetHex="00000158" Description="fish_ids" DisplayMethod="unsigned integer"/>
+              <Element Offset="352" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000160" Description="total_work_coin" DisplayMethod="unsigned integer"/>
+              <Element Offset="356" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000164" Description="work_dis" DisplayMethod="unsigned integer"/>
+              <Element Offset="360" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000168" Description="total_work_dis" DisplayMethod="unsigned integer"/>
+              <Element Offset="364" Vartype="Byte" Bytesize="1" OffsetHex="0000016C" Description="fisrt_rika" DisplayMethod="unsigned integer"/>
+              <Element Offset="368" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000170" Description="fish_step_1" DisplayMethod="unsigned integer"/>
+              <Element Offset="372" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000174" Description="fish_step_2" DisplayMethod="unsigned integer"/>
+              <Element Offset="376" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000178" Description="fish_step_3" DisplayMethod="unsigned integer"/>
+              <Element Offset="380" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000017C" Description="total_failed_401_count" DisplayMethod="unsigned integer"/>
+              <Element Offset="384" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000180" Description="total_success_401_count" DisplayMethod="unsigned integer"/>
+              <Element Offset="388" Vartype="Byte" Bytesize="1" OffsetHex="00000184" Description="ph_wc" DisplayMethod="unsigned integer"/>
+              <Element Offset="392" Vartype="4 Bytes" Bytesize="4" OffsetHex="00000188" Description="ph_wc_day" DisplayMethod="unsigned integer"/>
+              <Element Offset="396" Vartype="4 Bytes" Bytesize="4" OffsetHex="0000018C" Description="ph_wc_hour" DisplayMethod="unsigned integer"/>
+            </Elements>
+          </Structure>
+        </Element>
+        <Element Offset="8" Vartype="4 Bytes" Bytesize="4" RLECount="1022" OffsetHex="00000008" DisplayMethod="unsigned integer"/>
+      </Elements>
+    </Structure>
+  </Structures>
+</CheatTable>

@@ -1,7 +1,5 @@
 #include "cheat.h"
 #include "memory.h"
-#include <thread>
-#include <chrono>
 
 Cheat& Cheat::Instance() {
     static Cheat instance;
@@ -9,127 +7,92 @@ Cheat& Cheat::Instance() {
 }
 
 bool Cheat::Initialize() {
-    // 玩家基址钩子在dllmain.cpp中通过AOB扫描安装
+    // UserData 基址钩子在 dllmain.cpp 中通过 Dojo NTR.CT 的 AOB 扫描安装
     return true;
 }
 
-void Cheat::SetGodMode(bool enable) {
-    m_godMode = enable;
-    if (enable && IsPlayerValid()) {
-        SetHealth(9999);
-        SetMaxHealth(9999);
+uintptr_t Cheat::GetCoinAddress() const {
+    if (!IsUserDataValid()) {
+        return 0;
+    }
+
+    uintptr_t coinBase = Memory::Read<uintptr_t>(m_userDataBase + Offsets::CoinPointer);
+    return coinBase ? coinBase + Offsets::CoinValue : 0;
+}
+
+void Cheat::SetCoin(int value) {
+    uintptr_t address = GetCoinAddress();
+    if (address) {
+        Memory::Write<int>(address, value);
     }
 }
 
-void Cheat::SetHealth(int value) {
-    if (IsPlayerValid()) {
-        Memory::Write<int>(m_playerBase + Offsets::Health, value);
+void Cheat::SetFishCoin(int value) {
+    if (IsUserDataValid()) {
+        Memory::Write<int>(m_userDataBase + Offsets::FishCoin, value);
     }
 }
 
-void Cheat::SetMaxHealth(int value) {
-    if (IsPlayerValid()) {
-        Memory::Write<int>(m_playerBase + Offsets::MaxHealth, value);
+void Cheat::SetEnergy(int value) {
+    if (IsUserDataValid()) {
+        Memory::Write<int>(m_userDataBase + Offsets::Energy, value);
     }
 }
 
-void Cheat::SetSpeedHack(bool enable) {
-    m_speedHack = enable;
-    if (IsPlayerValid()) {
-        if (enable) {
-            if (m_originalSpeed == 0.0f) {
-                m_originalSpeed = Memory::Read<float>(m_playerBase + Offsets::MoveSpeed);
-            }
-            Memory::Write<float>(m_playerBase + Offsets::MoveSpeed, m_originalSpeed * 3.0f);
-        } else if (m_originalSpeed != 0.0f) {
-            Memory::Write<float>(m_playerBase + Offsets::MoveSpeed, m_originalSpeed);
-            m_originalSpeed = 0.0f;
-        }
+void Cheat::SetDay(int value) {
+    if (IsUserDataValid()) {
+        Memory::Write<int>(m_userDataBase + Offsets::Day, value);
     }
 }
 
-void Cheat::SetFlyHack(bool enable) {
-    m_flyHack = enable;
-    if (enable && IsPlayerValid()) {
-        Memory::Write<float>(m_playerBase + Offsets::MaxFallSpeed, -10.0f);
-    } else if (!enable && IsPlayerValid()) {
-        Memory::Write<float>(m_playerBase + Offsets::MaxFallSpeed, 15.0f);
+void Cheat::SetHour(int value) {
+    if (IsUserDataValid()) {
+        Memory::Write<int>(m_userDataBase + Offsets::Hour, value);
     }
 }
 
-void Cheat::SetSuperJump(bool enable) {
-    m_superJump = enable;
-    if (IsPlayerValid()) {
-        if (enable) {
-            if (m_originalJumpHeight == 0.0f) {
-                m_originalJumpHeight = Memory::Read<float>(m_playerBase + Offsets::JumpHeight);
-            }
-            Memory::Write<float>(m_playerBase + Offsets::JumpHeight, m_originalJumpHeight * 5.0f);
-        } else if (m_originalJumpHeight != 0.0f) {
-            Memory::Write<float>(m_playerBase + Offsets::JumpHeight, m_originalJumpHeight);
-            m_originalJumpHeight = 0.0f;
-        }
+void Cheat::SetMinute(int value) {
+    if (IsUserDataValid()) {
+        Memory::Write<int>(m_userDataBase + Offsets::Minute, value);
     }
 }
 
-void Cheat::SetRapidFire(bool enable) {
-    m_rapidFire = enable;
-    if (IsPlayerValid()) {
-        if (enable) {
-            if (m_originalFireRate == 0.0f) {
-                m_originalFireRate = Memory::Read<float>(m_playerBase + Offsets::FireRate);
-            }
-            Memory::Write<float>(m_playerBase + Offsets::FireRate, m_originalFireRate * 5.0f);
-        } else if (m_originalFireRate != 0.0f) {
-            Memory::Write<float>(m_playerBase + Offsets::FireRate, m_originalFireRate);
-            m_originalFireRate = 0.0f;
-        }
-    }
+int Cheat::GetCoin() const {
+    uintptr_t address = GetCoinAddress();
+    return address ? Memory::Read<int>(address) : 0;
 }
 
-void Cheat::SetInfiniteSkill(bool enable) {
-    m_infiniteSkill = enable;
-    if (enable && IsPlayerValid()) {
-        std::thread([this]() {
-            while (m_infiniteSkill && IsPlayerValid()) {
-                Memory::Write<int>(m_playerBase + Offsets::Skill, 9999);
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            }
-        }).detach();
-    }
-}
-
-void Cheat::SetAcidRainImmunity(bool enable) {
-    m_acidRainImmunity = enable;
-    if (IsPlayerValid()) {
-        Memory::Write<BYTE>(m_playerBase + Offsets::CanBeCoveredByAcidRain, enable ? 0 : 1);
-    }
-}
-
-int Cheat::GetHealth() const {
-    if (IsPlayerValid()) {
-        return Memory::Read<int>(m_playerBase + Offsets::Health);
+int Cheat::GetFishCoin() const {
+    if (IsUserDataValid()) {
+        return Memory::Read<int>(m_userDataBase + Offsets::FishCoin);
     }
     return 0;
 }
 
-int Cheat::GetMaxHealth() const {
-    if (IsPlayerValid()) {
-        return Memory::Read<int>(m_playerBase + Offsets::MaxHealth);
+int Cheat::GetEnergy() const {
+    if (IsUserDataValid()) {
+        return Memory::Read<int>(m_userDataBase + Offsets::Energy);
     }
     return 0;
 }
 
-float Cheat::GetMoveSpeed() const {
-    if (IsPlayerValid()) {
-        return Memory::Read<float>(m_playerBase + Offsets::MoveSpeed);
+int Cheat::GetDay() const {
+    if (IsUserDataValid()) {
+        return Memory::Read<int>(m_userDataBase + Offsets::Day);
     }
-    return 0.0f;
+    return 0;
 }
 
-float Cheat::GetFireRate() const {
-    if (IsPlayerValid()) {
-        return Memory::Read<float>(m_playerBase + Offsets::FireRate);
+int Cheat::GetHour() const {
+    if (IsUserDataValid()) {
+        return Memory::Read<int>(m_userDataBase + Offsets::Hour);
     }
-    return 0.0f;
+    return 0;
+}
+
+int Cheat::GetMinute() const {
+    if (IsUserDataValid()) {
+        return Memory::Read<int>(m_userDataBase + Offsets::Minute);
+    }
+    return 0;
 }

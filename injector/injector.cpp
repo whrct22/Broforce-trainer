@@ -7,10 +7,11 @@
 
 namespace {
 constexpr const wchar_t* kAllowedProcessNames[] = {
+    L"Dojo NTR.exe",
     L"Broforce.exe",
     L"Broforce.bin.x86_64.exe",
 };
-constexpr const wchar_t* kTrainerDllName = L"BroforceTrainer.dll";
+constexpr const wchar_t* kTrainerDllName = L"DojoNTRTrainer.dll";
 
 const wchar_t* BaseName(const wchar_t* path) {
     const wchar_t* slash = wcsrchr(path, L'\\');
@@ -80,8 +81,8 @@ bool GetProcessImagePath(DWORD processId, wchar_t* imagePath, DWORD imagePathCou
 }
 }
 
-// 获取明确允许的 Broforce 进程 ID，不匹配系统进程或其它任意进程。
-DWORD FindBroforceProcessId(wchar_t* matchedName, DWORD matchedNameCount, wchar_t* imagePath, DWORD imagePathCount) {
+// 获取明确允许的 Dojo NTR 进程 ID，不匹配系统进程或其它任意进程。
+DWORD FindDojoNTRProcessId(wchar_t* matchedName, DWORD matchedNameCount, wchar_t* imagePath, DWORD imagePathCount) {
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snapshot == INVALID_HANDLE_VALUE) {
         printf("[ERROR] CreateToolhelp32Snapshot failed: %lu\n", GetLastError());
@@ -218,10 +219,10 @@ bool InjectDLL(DWORD processId, const wchar_t* dllPath) {
 
 int main(int argc, char* argv[]) {
     printf("========================================\n");
-    printf("   Broforce Trainer Injector\n");
+    printf("   Dojo NTR Trainer Injector\n");
     printf("========================================\n\n");
-    printf("[INFO] This tool only searches for Broforce.exe / Broforce.bin.x86_64.exe.\n");
-    printf("[INFO] It loads the explicitly named BroforceTrainer.dll into that game process.\n\n");
+    printf("[INFO] This tool only searches for Dojo NTR.exe.\n");
+    printf("[INFO] It loads the explicitly named DojoNTRTrainer.dll into that game process.\n\n");
 
     wchar_t dllPath[MAX_PATH] = {};
     if (argc >= 2) {
@@ -231,7 +232,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     } else if (!BuildLocalDllPath(dllPath, MAX_PATH)) {
-        printf("[ERROR] Failed to build local BroforceTrainer.dll path\n");
+        printf("[ERROR] Failed to build local DojoNTRTrainer.dll path\n");
         system("pause");
         return 1;
     }
@@ -260,13 +261,13 @@ int main(int argc, char* argv[]) {
 
     printf("[INFO] Full DLL path: %ls\n\n", fullPath);
 
-    printf("[INFO] Searching for Broforce process...\n");
+    printf("[INFO] Searching for Dojo NTR process...\n");
     wchar_t matchedProcessName[MAX_PATH] = {};
     wchar_t processImagePath[MAX_PATH] = {};
-    DWORD processId = FindBroforceProcessId(matchedProcessName, MAX_PATH, processImagePath, MAX_PATH);
+    DWORD processId = FindDojoNTRProcessId(matchedProcessName, MAX_PATH, processImagePath, MAX_PATH);
 
     if (processId == 0) {
-        printf("[ERROR] Broforce process not found. Please start the game first.\n");
+        printf("[ERROR] Dojo NTR process not found. Please start the game first.\n");
         system("pause");
         return 1;
     }

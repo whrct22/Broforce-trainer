@@ -17,15 +17,12 @@ public:
     void MarkDirty();
     const char* Path() const;
 
-    LockConfig health{ false, 9999.0 };
-    LockConfig maxHealth{ false, 9999.0 };
-    LockConfig moveSpeed{ false, 15.0 };
-    LockConfig maxFallSpeed{ false, -10.0 };
-    LockConfig jumpHeight{ false, 20.0 };
-    LockConfig fireRate{ false, 5.0 };
-    LockConfig skill{ false, 9999.0 };
-    LockConfig lives{ false, 99.0 };
-    LockConfig acidRain{ false, 0.0 };
+    LockConfig coin{ false, 999999.0 };
+    LockConfig fishCoin{ false, 999999.0 };
+    LockConfig energy{ false, 999.0 };
+    LockConfig day{ false, 1.0 };
+    LockConfig hour{ false, 8.0 };
+    LockConfig minute{ false, 0.0 };
 
     double guiAlpha = 0.92;
 
